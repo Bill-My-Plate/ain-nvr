@@ -127,3 +127,49 @@ test('playback accepts a valid final IDR completed only by flush', async () => {
   }
   assert.deepEqual(messages.map((message) => message.kind), ['ready', 'video', 'end']);
 });
+
+test('playback keeps bounded audio seen while proving the first IDR', async () => {
+  const sps = createBaselineSps();
+  const pps = Buffer.from([0x68, 0xaa]);
+  const idr = Buffer.from([0x65, 1]);
+  const stap = Buffer.concat([
+    Buffer.from([0x78, 0, sps.length]), sps,
+    Buffer.from([0, pps.length]), pps,
+    Buffer.from([0, idr.length]), idr,
+  ]);
+  const audioTrack = {
+    trackId: 'audio', mediaType: 'audio', codec: 'pcmu',
+    payloadType: 0, clockRate: 8_000, rtpChannel: 2, rtcpChannel: 3,
+  } as const;
+  const video = interleaved(0, createRtp(1, 90_000, stap));
+  const audio = interleaved(2, createRtp(1, 8_000, Buffer.from([0xff, 0x80]), true, 0, 2));
+  const data = Buffer.concat([video, audio]);
+  const segment: RecordedSegmentDescriptor<string> = {
+    ref: 'private-ref',
+    sessionId: 'session-1',
+    startTimeMs: 1_000,
+    endTimeMs: 1_000,
+    discontinuityBefore: false,
+    source: {
+      id: 'memory',
+      safeLength: data.length,
+      read: async (offset, length) => data.subarray(offset, offset + length),
+    },
+    tracks: [videoTrack, audioTrack],
+    clockAnchors: [
+      { trackId: 'video', byteOffset: 0, timeMs: 1_000, rtpTimestamp: 90_000 },
+      { trackId: 'audio', byteOffset: video.length, timeMs: 1_000, rtpTimestamp: 8_000 },
+    ],
+  };
+  const source: PlaybackSource<string> = {
+    resolveStart: async () => ({ segment, byteOffset: 0, actualStartTimeMs: 1_000 }),
+    nextSegment: async () => undefined,
+  };
+  const messages = [];
+  for await (const message of createPlaybackStream({
+    source,
+    cameraId: 'camera-1',
+    startTimeMs: 1_000,
+  })) messages.push(message);
+  assert.deepEqual(messages.map((message) => message.kind), ['ready', 'video', 'audio', 'end']);
+});

@@ -109,6 +109,7 @@ export async function* createPlaybackStream<TSegmentRef>(
   let bootstrapBytes = 0;
   let lastBootstrapTimeMs = start.actualStartTimeMs;
   let sawVideoPacket = false;
+  const pendingAudio: PcmAudioAccessUnit[] = [];
 
   const consumeVideoUnit = (unit: H264AccessUnit): PlaybackMessage[] => {
     const messages: PlaybackMessage[] = [];
@@ -165,21 +166,35 @@ export async function* createPlaybackStream<TSegmentRef>(
           ...(packet.sequenceGap === undefined ? {} : { lostBefore: packet.sequenceGap.lost }),
         });
         for (const unit of units) {
+          const wasReady = ready;
           for (const message of consumeVideoUnit(unit)) yield message;
+          if (!wasReady && ready) {
+            for (const audio of pendingAudio.splice(0)) yield audio;
+          }
         }
         continue;
       }
 
-      if (ready && packet.track?.mediaType === 'audio') {
+      if (packet.track?.mediaType === 'audio') {
         const audio = createG711AccessUnit(packet, start.actualStartTimeMs);
-        if (audio !== undefined) yield audio;
+        if (audio !== undefined) {
+          if (ready) yield audio;
+          else {
+            pendingAudio.push(audio);
+            if (pendingAudio.length > 512) pendingAudio.shift();
+          }
+        }
       }
     }
 
     const next = await options.source.nextSegment(segment.ref, options.signal);
     if (next === undefined) {
       for (const unit of assembler.flush()) {
+        const wasReady = ready;
         for (const message of consumeVideoUnit(unit)) yield message;
+        if (!wasReady && ready) {
+          for (const audio of pendingAudio.splice(0)) yield audio;
+        }
       }
       if (!ready) {
         throw assembler.configuration === undefined
