@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  createRtspAuthorization,
+  parseRtspAuthChallenge,
+} from '../src/rtsp/auth.js';
+import {
   createH264CodecConfiguration,
   H264ConfigurationTracker,
   splitH264NalUnits,
@@ -10,6 +14,21 @@ import { inspectH264Payload, H264PayloadError } from '../src/rtp/h264.js';
 import { RtpReorderBuffer } from '../src/rtp/reorder-buffer.js';
 import { RtpTimestampUnwrapper } from '../src/rtp/timestamp.js';
 import { createBaselineSps } from './helpers/media.js';
+
+test('RTSP Digest authorization quotes the algorithm for Hikvision compatibility', () => {
+  const challenge = parseRtspAuthChallenge(
+    'Digest realm="IP Camera", nonce="abc", stale="FALSE", Basic realm="IP Camera"',
+  );
+  const authorization = createRtspAuthorization(
+    challenge,
+    { username: 'admin', password: 'password' },
+    'DESCRIBE',
+    'rtsp://camera.example/Streaming/channels/101',
+  );
+
+  assert.match(authorization.header, /algorithm="MD5"/u);
+  assert.doesNotMatch(authorization.header, /algorithm=MD5(?:,|$)/u);
+});
 
 test('RTP reorder handles reordering, duplicates, loss, and rollover', () => {
   const reorder = new RtpReorderBuffer<string>(4);

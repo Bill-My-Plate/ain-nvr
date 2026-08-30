@@ -115,7 +115,10 @@ export function createRtspAuthorization(
     `nonce=${quote(challenge.nonce)}`,
     `uri=${quote(uri)}`,
     `response=${quote(response)}`,
-    `algorithm=${challenge.algorithm}`,
+    // Hikvision cameras may reject the RFC token form (algorithm=MD5) even
+    // though it is valid. Scrypted quotes every Digest value, and the quoted
+    // form is accepted by both the strict and Hikvision implementations.
+    `algorithm=${quote(challenge.algorithm)}`,
   ];
   if (challenge.opaque !== undefined) {
     fields.push(`opaque=${quote(challenge.opaque)}`);
