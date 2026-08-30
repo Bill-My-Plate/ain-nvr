@@ -1,0 +1,16 @@
+export {
+  RecordingParser,
+  serializeInterleavedFrame,
+  type RecordingIndexEvent,
+  type RecordingPacketWriter,
+  type RecordingParserOptions,
+  type RecordingParserStatus,
+  type RecordingWriteRequest,
+} from '../recording-parser/recording-parser.js';
+export {
+  RecordingPipeline,
+  type RecordingPacketSource,
+  type RecordingPipelineOptions,
+  type RecordingPipelineState,
+  type RecordingPipelineStatus,
+} from '../recording-parser/recording-pipeline.js';

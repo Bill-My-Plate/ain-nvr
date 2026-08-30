@@ -1,0 +1,96 @@
+{
+  "name": "ain-nvr",
+  "version": "0.1.0",
+  "description": "Framework-neutral RTSP, RTP, H.264, playback, and frame extraction primitives for Node.js",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./rtsp-parser": {
+      "types": "./dist/src/exports/rtsp-parser.d.ts",
+      "import": "./dist/src/exports/rtsp-parser.js"
+    },
+    "./rtsp-client": {
+      "types": "./dist/src/exports/rtsp-client.d.ts",
+      "import": "./dist/src/exports/rtsp-client.js"
+    },
+    "./rtp-parser": {
+      "types": "./dist/src/exports/rtp-parser.d.ts",
+      "import": "./dist/src/exports/rtp-parser.js"
+    },
+    "./h264": {
+      "types": "./dist/src/exports/h264.d.ts",
+      "import": "./dist/src/exports/h264.js"
+    },
+    "./stream-session": {
+      "types": "./dist/src/exports/stream-session.d.ts",
+      "import": "./dist/src/exports/stream-session.js"
+    },
+    "./recording-parser": {
+      "types": "./dist/src/exports/recording-parser.d.ts",
+      "import": "./dist/src/exports/recording-parser.js"
+    },
+    "./recorded-stream-parser": {
+      "types": "./dist/src/exports/recorded-stream-parser.d.ts",
+      "import": "./dist/src/exports/recorded-stream-parser.js"
+    },
+    "./playback": {
+      "types": "./dist/src/exports/playback.d.ts",
+      "import": "./dist/src/exports/playback.js"
+    },
+    "./playback-wire": {
+      "types": "./dist/src/exports/playback-wire.d.ts",
+      "import": "./dist/src/exports/playback-wire.js"
+    },
+    "./frame-extractor": {
+      "types": "./dist/src/exports/frame-extractor.d.ts",
+      "import": "./dist/src/exports/frame-extractor.js"
+    },
+    "./rtp-forwarder": {
+      "types": "./dist/src/exports/rtp-forwarder.d.ts",
+      "import": "./dist/src/exports/rtp-forwarder.js"
+    },
+    "./rtsp-bridge": {
+      "types": "./dist/src/exports/rtsp-bridge.d.ts",
+      "import": "./dist/src/exports/rtsp-bridge.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js",
+    "prepack": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bill-My-Plate/ain-nvr.git"
+  },
+  "author": "billmyplate",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Bill-My-Plate/ain-nvr/issues"
+  },
+  "homepage": "https://github.com/Bill-My-Plate/ain-nvr#readme",
+  "optionalDependencies": {
+    "@scrypted/libav": "1.0.212",
+    "@scrypted/prebuild-install": "7.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "typescript": "7.0.2"
+  }
+}
