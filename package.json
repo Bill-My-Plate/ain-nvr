@@ -166,7 +166,7 @@
     "url": "https://github.com/Bill-My-Plate/ain-nvr/issues"
   },
   "homepage": "https://github.com/Bill-My-Plate/ain-nvr#readme",
-  "optionalDependencies": {
+  "dependencies": {
     "@scrypted/libav": "1.0.212",
     "@scrypted/prebuild-install": "7.1.10"
   },

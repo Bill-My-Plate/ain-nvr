@@ -25,7 +25,11 @@ async function collectTypeScriptFiles(directory) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
       files.push(...await collectTypeScriptFiles(path));
-    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+    } else if (
+      entry.isFile()
+      && entry.name.endsWith('.ts')
+      && !entry.name.endsWith('.d.ts')
+    ) {
       files.push(path);
     }
   }
