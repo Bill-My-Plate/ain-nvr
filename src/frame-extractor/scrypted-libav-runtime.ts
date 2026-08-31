@@ -35,7 +35,7 @@ export function createScryptedLibavRuntime(): LibavRuntime {
           libav = await import('@scrypted/libav');
         } catch (error) {
           throw new Error(
-            'Optional @scrypted/libav dependency is not installed or could not be loaded.',
+            'Required @scrypted/libav dependency is not installed or could not be loaded.',
             { cause: error },
           );
         }

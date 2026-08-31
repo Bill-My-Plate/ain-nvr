@@ -2,6 +2,16 @@
   "name": "ain-nvr",
   "version": "0.1.0",
   "description": "Framework-neutral RTSP, RTP, H.264, playback, and frame extraction primitives for Node.js",
+  "keywords": [
+    "nvr",
+    "rtsp",
+    "rtp",
+    "h264",
+    "video",
+    "camera",
+    "playback",
+    "recording"
+  ],
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -10,6 +20,7 @@
   "files": [
     "dist",
     "docs",
+    "scripts/install-libav.mjs",
     "README.md",
     "LICENSE"
   ],
@@ -154,7 +165,9 @@
     "pretest": "npm run build",
     "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js",
     "prepare": "npm run build",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check && npm test",
+    "postinstall": "node ./scripts/install-libav.mjs"
   },
   "repository": {
     "type": "git",
@@ -166,6 +179,9 @@
     "url": "https://github.com/Bill-My-Plate/ain-nvr/issues"
   },
   "homepage": "https://github.com/Bill-My-Plate/ain-nvr#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@scrypted/libav": "1.0.212",
     "@scrypted/prebuild-install": "7.1.10"
