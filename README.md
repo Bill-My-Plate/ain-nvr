@@ -1,6 +1,7 @@
 # ain-nvr
 
-`ain-nvr` is an ESM Node.js package for native RTSP recording and playback.
+`ain-nvr` is a dual ESM and CommonJS Node.js package for native RTSP recording
+and playback.
 It parses RTSP, RTP, RTCP, H.264, and G.711 without starting an `ffmpeg`
 process.
 
@@ -30,11 +31,18 @@ camera discovery, or a browser UI.
 npm install ain-nvr
 ```
 
-The package is ESM-only:
+ESM applications can import public entrypoints:
 
 ```ts
 import { RtspSessionManager } from 'ain-nvr/stream-session';
 import { RecordingPipeline } from 'ain-nvr/recording-parser';
+```
+
+CommonJS applications can require the same entrypoints:
+
+```js
+const { RtspSessionManager } = require('ain-nvr/stream-session');
+const { RecordingPipeline } = require('ain-nvr/recording-parser');
 ```
 
 `@scrypted/libav` is optional. Normal RTSP parsing, recording, and playback do
@@ -59,7 +67,7 @@ binary until `runtime.initialize()` or an extractor is started.
 | `ain-nvr/rtp-forwarder` | Bounded UDP forwarding building block |
 | `ain-nvr/rtsp-bridge` | Loopback RTSP bridge for decoding a shared session |
 
-Only these entrypoints are public. Importing paths under `dist/src` is not
+Only these entrypoints are public. Importing paths under `dist` is not
 supported.
 
 ## Shared live stream

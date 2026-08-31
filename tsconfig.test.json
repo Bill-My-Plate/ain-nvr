@@ -4,5 +4,6 @@
     "outDir": ".test-dist",
     "declaration": false,
     "declarationMap": false
-  }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "test/**/*.cts"]
 }

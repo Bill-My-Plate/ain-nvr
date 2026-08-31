@@ -13,65 +13,145 @@
     "README.md",
     "LICENSE"
   ],
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "import": "./dist/src/index.js"
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./rtsp-parser": {
-      "types": "./dist/src/exports/rtsp-parser.d.ts",
-      "import": "./dist/src/exports/rtsp-parser.js"
+      "import": {
+        "types": "./dist/esm/exports/rtsp-parser.d.ts",
+        "default": "./dist/esm/exports/rtsp-parser.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtsp-parser.d.ts",
+        "default": "./dist/cjs/exports/rtsp-parser.js"
+      }
     },
     "./rtsp-client": {
-      "types": "./dist/src/exports/rtsp-client.d.ts",
-      "import": "./dist/src/exports/rtsp-client.js"
+      "import": {
+        "types": "./dist/esm/exports/rtsp-client.d.ts",
+        "default": "./dist/esm/exports/rtsp-client.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtsp-client.d.ts",
+        "default": "./dist/cjs/exports/rtsp-client.js"
+      }
     },
     "./rtp-parser": {
-      "types": "./dist/src/exports/rtp-parser.d.ts",
-      "import": "./dist/src/exports/rtp-parser.js"
+      "import": {
+        "types": "./dist/esm/exports/rtp-parser.d.ts",
+        "default": "./dist/esm/exports/rtp-parser.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtp-parser.d.ts",
+        "default": "./dist/cjs/exports/rtp-parser.js"
+      }
     },
     "./h264": {
-      "types": "./dist/src/exports/h264.d.ts",
-      "import": "./dist/src/exports/h264.js"
+      "import": {
+        "types": "./dist/esm/exports/h264.d.ts",
+        "default": "./dist/esm/exports/h264.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/h264.d.ts",
+        "default": "./dist/cjs/exports/h264.js"
+      }
     },
     "./stream-session": {
-      "types": "./dist/src/exports/stream-session.d.ts",
-      "import": "./dist/src/exports/stream-session.js"
+      "import": {
+        "types": "./dist/esm/exports/stream-session.d.ts",
+        "default": "./dist/esm/exports/stream-session.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/stream-session.d.ts",
+        "default": "./dist/cjs/exports/stream-session.js"
+      }
     },
     "./recording-parser": {
-      "types": "./dist/src/exports/recording-parser.d.ts",
-      "import": "./dist/src/exports/recording-parser.js"
+      "import": {
+        "types": "./dist/esm/exports/recording-parser.d.ts",
+        "default": "./dist/esm/exports/recording-parser.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/recording-parser.d.ts",
+        "default": "./dist/cjs/exports/recording-parser.js"
+      }
     },
     "./recorded-stream-parser": {
-      "types": "./dist/src/exports/recorded-stream-parser.d.ts",
-      "import": "./dist/src/exports/recorded-stream-parser.js"
+      "import": {
+        "types": "./dist/esm/exports/recorded-stream-parser.d.ts",
+        "default": "./dist/esm/exports/recorded-stream-parser.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/recorded-stream-parser.d.ts",
+        "default": "./dist/cjs/exports/recorded-stream-parser.js"
+      }
     },
     "./playback": {
-      "types": "./dist/src/exports/playback.d.ts",
-      "import": "./dist/src/exports/playback.js"
+      "import": {
+        "types": "./dist/esm/exports/playback.d.ts",
+        "default": "./dist/esm/exports/playback.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/playback.d.ts",
+        "default": "./dist/cjs/exports/playback.js"
+      }
     },
     "./playback-wire": {
-      "types": "./dist/src/exports/playback-wire.d.ts",
-      "import": "./dist/src/exports/playback-wire.js"
+      "import": {
+        "types": "./dist/esm/exports/playback-wire.d.ts",
+        "default": "./dist/esm/exports/playback-wire.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/playback-wire.d.ts",
+        "default": "./dist/cjs/exports/playback-wire.js"
+      }
     },
     "./frame-extractor": {
-      "types": "./dist/src/exports/frame-extractor.d.ts",
-      "import": "./dist/src/exports/frame-extractor.js"
+      "import": {
+        "types": "./dist/esm/exports/frame-extractor.d.ts",
+        "default": "./dist/esm/exports/frame-extractor.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/frame-extractor.d.ts",
+        "default": "./dist/cjs/exports/frame-extractor.js"
+      }
     },
     "./rtp-forwarder": {
-      "types": "./dist/src/exports/rtp-forwarder.d.ts",
-      "import": "./dist/src/exports/rtp-forwarder.js"
+      "import": {
+        "types": "./dist/esm/exports/rtp-forwarder.d.ts",
+        "default": "./dist/esm/exports/rtp-forwarder.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtp-forwarder.d.ts",
+        "default": "./dist/cjs/exports/rtp-forwarder.js"
+      }
     },
     "./rtsp-bridge": {
-      "types": "./dist/src/exports/rtsp-bridge.d.ts",
-      "import": "./dist/src/exports/rtsp-bridge.js"
+      "import": {
+        "types": "./dist/esm/exports/rtsp-bridge.d.ts",
+        "default": "./dist/esm/exports/rtsp-bridge.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtsp-bridge.d.ts",
+        "default": "./dist/cjs/exports/rtsp-bridge.js"
+      }
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node ./scripts/build-dual.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
+    "pretest": "npm run build",
     "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js",
     "prepare": "npm run build",
     "prepack": "npm run build"
@@ -92,6 +172,7 @@
   },
   "devDependencies": {
     "@types/node": "22.20.1",
+    "esbuild": "0.28.2",
     "typescript": "7.0.2"
   }
 }
