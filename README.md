@@ -20,7 +20,7 @@ catalogs, retention, and access control inside the application.
 - SPS/PPS discovery from SDP and in-band packets.
 - Storage-neutral recording indexes and recorded `$` packet parsing.
 - Decoder-safe playback as Annex-B H.264 and signed 16-bit PCM.
-- Optional JPEG extraction through `@scrypted/libav`.
+- JPEG extraction through the required `@scrypted/libav` dependency.
 
 Not supported: RTSP/UDP, H.265, AAC, transcoding, container export, retention,
 camera discovery, or a browser UI.
@@ -30,6 +30,46 @@ camera discovery, or a browser UI.
 ```bash
 npm install ain-nvr
 ```
+
+### Yarn Classic
+
+`@scrypted/libav@1.0.212` calls `prebuild-install` from its install script but
+declares that command only as a development dependency. Yarn Classic therefore
+cannot find the command during a clean dependency build. Install with:
+
+```bash
+SKIP_SCRYPTED_LIBAV_PREBUILD=true yarn install
+```
+
+This skips only the broken upstream libav hook. The `ain-nvr` postinstall step
+then downloads and verifies the required native binary through libav's runtime
+installer. `createScryptedLibavRuntime().initialize()` performs the same check
+again before use, so installations made with scripts disabled fail clearly at
+runtime instead of silently disabling frame extraction.
+
+### Bun
+
+Bun blocks dependency lifecycle scripts unless the application trusts the
+package. Trust `ain-nvr`, but do not trust `@scrypted/libav`:
+
+```json
+{
+  "trustedDependencies": [
+    "ain-nvr"
+  ]
+}
+```
+
+Then run:
+
+```bash
+bun install
+```
+
+Bun intentionally reports the upstream `@scrypted/libav` install script as
+blocked. That is expected. The trusted `ain-nvr` postinstall uses libav's
+runtime installer instead and verifies the native binary. Do not run
+`bun pm trust @scrypted/libav` or `bun pm trust --all` for this dependency tree.
 
 ESM applications can import public entrypoints:
 
@@ -45,9 +85,11 @@ const { RtspSessionManager } = require('ain-nvr/stream-session');
 const { RecordingPipeline } = require('ain-nvr/recording-parser');
 ```
 
-`@scrypted/libav` is optional. Normal RTSP parsing, recording, and playback do
-not load it. Importing `ain-nvr/frame-extractor` also does not load its native
-binary until `runtime.initialize()` or an extractor is started.
+`@scrypted/libav` is a required package dependency, so every `ain-nvr`
+installation includes native frame-extraction support. Normal RTSP parsing,
+recording, and playback do not load its native binary. Importing
+`ain-nvr/frame-extractor` also does not load it until `runtime.initialize()` or
+an extractor is started.
 
 ## Public entrypoints
 
@@ -63,7 +105,7 @@ binary until `runtime.initialize()` or an extractor is started.
 | `ain-nvr/recorded-stream-parser` | Parse stored RTSP-interleaved bytes through an abstract reader |
 | `ain-nvr/playback` | Resolve abstract segments and emit video/audio playback units |
 | `ain-nvr/playback-wire` | Optional browser control and binary message helpers |
-| `ain-nvr/frame-extractor` | Optional URL or shared-session libav-to-JPEG extraction |
+| `ain-nvr/frame-extractor` | URL or shared-session libav-to-JPEG extraction |
 | `ain-nvr/rtp-forwarder` | Bounded UDP forwarding building block |
 | `ain-nvr/rtsp-bridge` | Loopback RTSP bridge for decoding a shared session |
 
@@ -285,6 +327,6 @@ npm run build
 npm pack --dry-run
 ```
 
-The TypeScript bindings in this repository are MIT licensed. The optional
-native libav/FFmpeg libraries have their own LGPL and component license terms.
+The TypeScript bindings in this repository are MIT licensed. The required
+native libav/FFmpeg dependency has its own LGPL and component license terms.
 This statement describes the dependency boundary; it is not legal advice.
