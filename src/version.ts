@@ -1,1 +1,1 @@
-export const AIN_NVR_VERSION = '0.1.2';
+export const AIN_NVR_VERSION = '0.1.3';

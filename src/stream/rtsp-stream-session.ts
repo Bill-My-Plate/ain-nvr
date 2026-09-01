@@ -51,6 +51,16 @@ export interface RtspSessionLease {
   release(): Promise<void>;
 }
 
+export type RtspSessionTrackInfo = TrackDescription & {
+  readonly control: string;
+  readonly fmtp?: string;
+};
+
+export interface RtspSessionInfo {
+  readonly sdp: string;
+  readonly tracks: readonly RtspSessionTrackInfo[];
+}
+
 type PacketSubscriber = (packet: MediaPacket) => void;
 type AccessUnitSubscriber = (accessUnit: H264AccessUnit) => void;
 
@@ -88,7 +98,7 @@ function parseFmtp(value: string | undefined): Map<string, string> {
   return result;
 }
 
-function tracksFromSession(session: RtspClientSession): readonly TrackDescription[] {
+function sessionInfoFromSession(session: RtspClientSession): RtspSessionInfo {
   const fmtp = session.video.media.fmtp.get(session.video.rtpMap.payloadType);
   let parameterSets: TrackDescription['parameterSets'];
   const encoded = parseFmtp(fmtp).get('sprop-parameter-sets')?.split(',');
@@ -103,26 +113,31 @@ function tracksFromSession(session: RtspClientSession): readonly TrackDescriptio
       // In-band parameter sets remain authoritative.
     }
   }
-  const video: TrackDescription = {
+  const video: RtspSessionTrackInfo = {
     trackId: 'video',
     mediaType: 'video',
     codec: 'h264',
     payloadType: session.video.rtpMap.payloadType,
     clockRate: session.video.rtpMap.clockRate,
+    control: session.video.media.control ?? '',
     rtpChannel: session.video.rtpChannel,
     rtcpChannel: session.video.rtcpChannel,
+    ...(fmtp === undefined ? {} : { fmtp }),
     ...(parameterSets === undefined ? {} : { parameterSets }),
   };
-  if (session.audio === undefined) return [video];
-  return [video, {
+  if (session.audio === undefined) return { sdp: session.sdp, tracks: [video] };
+  const audioFmtp = session.audio.media.fmtp.get(session.audio.rtpMap.payloadType);
+  return { sdp: session.sdp, tracks: [video, {
     trackId: 'audio',
     mediaType: 'audio',
     codec: session.audio.codec,
     payloadType: session.audio.rtpMap.payloadType,
     clockRate: session.audio.rtpMap.clockRate,
+    control: session.audio.media.control ?? '',
     rtpChannel: session.audio.rtpChannel,
     rtcpChannel: session.audio.rtcpChannel,
-  }];
+    ...(audioFmtp === undefined ? {} : { fmtp: audioFmtp }),
+  }] };
 }
 
 export class RtspStreamSession extends EventEmitter {
@@ -138,6 +153,7 @@ export class RtspStreamSession extends EventEmitter {
   private currentClient: RtspClient | undefined;
   private stateValue: SessionState = 'idle';
   private tracksValue: readonly TrackDescription[] = [];
+  private sessionInfoValue: RtspSessionInfo | undefined;
   private assembler: H264AccessUnitAssembler | undefined;
   private videoReorder = new RtpReorderBuffer<MediaPacket>(4);
   private videoSsrc: number | undefined;
@@ -168,6 +184,14 @@ export class RtspStreamSession extends EventEmitter {
 
   get tracks(): readonly TrackDescription[] {
     return this.tracksValue;
+  }
+
+  /** Available after start(), or RtspSessionManager.acquire(), resolves. */
+  get sessionInfo(): RtspSessionInfo {
+    if (this.sessionInfoValue === undefined) {
+      throw new Error('RTSP session information is not available before the session is streaming.');
+    }
+    return this.sessionInfoValue;
   }
 
   async start(signal?: AbortSignal): Promise<void> {
@@ -265,7 +289,8 @@ export class RtspStreamSession extends EventEmitter {
   }
 
   private configureSession(session: RtspClientSession, reconnect: boolean): void {
-    this.tracksValue = tracksFromSession(session);
+    this.sessionInfoValue = sessionInfoFromSession(session);
+    this.tracksValue = this.sessionInfoValue.tracks;
     const video = this.tracksValue.find((track) => track.mediaType === 'video');
     this.assembler = video === undefined ? undefined : new H264AccessUnitAssembler({
       payloadType: video.payloadType,

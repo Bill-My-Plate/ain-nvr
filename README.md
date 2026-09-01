@@ -122,6 +122,10 @@ released.
 const manager = new RtspSessionManager();
 const lease = await manager.acquire({ url: camera.streamUrl });
 
+// Present after acquire() resolves. It contains the original SDP plus the
+// negotiated channels and normalized SDP parameter sets for every track.
+const { sdp, tracks } = lease.session.sessionInfo;
+
 const stopPackets = lease.session.subscribeMediaPackets((packet) => {
   // packet.rawInterleavedFrame is the original "$" frame.
 });
@@ -137,7 +141,9 @@ await lease.release();
 
 The session reconnects with bounded exponential backoff. It parses every TCP
 chunk incrementally and never assumes that one socket event equals one RTSP or
-RTP packet.
+RTP packet. `sessionInfo` also preserves the original media `control` and
+`fmtp` values. Invalid SDP parameter sets stay absent so an application can
+replace them with authoritative in-band SPS/PPS later.
 
 ## Recording without exposing storage design
 
