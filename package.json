@@ -27,6 +27,46 @@
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "rtsp-parser": [
+        "dist/cjs/exports/rtsp-parser.d.ts"
+      ],
+      "rtsp-client": [
+        "dist/cjs/exports/rtsp-client.d.ts"
+      ],
+      "rtp-parser": [
+        "dist/cjs/exports/rtp-parser.d.ts"
+      ],
+      "h264": [
+        "dist/cjs/exports/h264.d.ts"
+      ],
+      "stream-session": [
+        "dist/cjs/exports/stream-session.d.ts"
+      ],
+      "recording-parser": [
+        "dist/cjs/exports/recording-parser.d.ts"
+      ],
+      "recorded-stream-parser": [
+        "dist/cjs/exports/recorded-stream-parser.d.ts"
+      ],
+      "playback": [
+        "dist/cjs/exports/playback.d.ts"
+      ],
+      "playback-wire": [
+        "dist/cjs/exports/playback-wire.d.ts"
+      ],
+      "frame-extractor": [
+        "dist/cjs/exports/frame-extractor.d.ts"
+      ],
+      "rtp-forwarder": [
+        "dist/cjs/exports/rtp-forwarder.d.ts"
+      ],
+      "rtsp-bridge": [
+        "dist/cjs/exports/rtsp-bridge.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "import": {
