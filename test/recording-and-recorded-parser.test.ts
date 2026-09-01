@@ -83,6 +83,68 @@ test('recording index does not trust an early marker on an incomplete IDR FU-A',
   assert.equal(flushed.some((event) => event.type === 'keyframe'), false);
 });
 
+test('decoder-safe recording waits for a complete IDR at initial start and rotation', async () => {
+  const writes: RecordingWriteRequest[] = [];
+  const parser = new RecordingParser<number>({
+    tracks: [videoTrack],
+    decoderSafeBoundaries: true,
+  });
+  const writer = {
+    write: async (request: RecordingWriteRequest): Promise<number> => {
+      writes.push(request);
+      return writes.length - 1;
+    },
+  };
+
+  await parser.process(mediaPacket(1, 90_000, Buffer.from([0x61, 1])), writer);
+  assert.equal(writes.length, 0);
+
+  await parser.process(mediaPacket(2, 93_600, keyPayload()), writer);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0]?.boundaryBefore, true);
+
+  parser.requestBoundary();
+  await parser.process(mediaPacket(3, 97_200, Buffer.from([0x61, 2])), writer);
+  assert.equal(writes[1]?.boundaryBefore, false);
+  await parser.process(mediaPacket(4, 100_800, keyPayload()), writer);
+  assert.equal(writes[2]?.boundaryBefore, true);
+});
+
+test('decoder-safe recording skips a damaged IDR and marks a reconnect boundary', async () => {
+  const track = {
+    ...videoTrack,
+    parameterSets: { sps: createBaselineSps(), pps: Buffer.from([0x68, 0xaa]) },
+  };
+  const writes: RecordingWriteRequest[] = [];
+  const parser = new RecordingParser<number>({
+    tracks: [track],
+    decoderSafeBoundaries: true,
+  });
+  const writer = {
+    write: async (request: RecordingWriteRequest): Promise<number> => {
+      writes.push(request);
+      return writes.length - 1;
+    },
+  };
+
+  await parser.process(mediaPacket(
+    1,
+    90_000,
+    Buffer.from([0x7c, 0x85, 1]),
+    { marker: true, track },
+  ), writer);
+  assert.equal(writes.length, 0);
+
+  const recovered = mediaPacket(2, 93_600, Buffer.from([0x65, 2]), { track });
+  Object.assign(recovered, { discontinuity: true });
+  const events = await parser.process(recovered, writer);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0]?.boundaryBefore, true);
+  assert.equal(writes[0]?.discontinuityBefore, true);
+  assert.equal(events.some((event) => event.type === 'discontinuity'
+    && event.reason === 'source-reconnect'), true);
+});
+
 test('recording pipeline serializes writes and releases bounded backpressure', async () => {
   let subscriber: ((packet: MediaPacket) => void) | undefined;
   let pauses = 0;

@@ -154,6 +154,7 @@ type PrivateLocation = {
 const pipeline = new RecordingPipeline<PrivateLocation>({
   source: lease.session,
   tracks: lease.session.tracks,
+  decoderSafeBoundaries: true,
   writer: {
     async write({ packet, boundaryBefore, discontinuityBefore }) {
       // Private application logic:
@@ -185,6 +186,12 @@ await pipeline.stop();
 Writes are serialized. The default queue pauses socket reads at 8 MiB, resumes
 at 4 MiB, and fails at 16 MiB or 4,096 queued packets. These values can be
 changed. A writer failure stops only this pipeline; it does not delete files.
+
+`decoderSafeBoundaries` is optional and defaults to `false` for compatibility.
+When enabled, the parser discards the unsafe initial prefix, waits for valid
+H.264 configuration and a complete undamaged IDR, and applies requested or
+reconnect boundaries only at another complete IDR. Packets before a requested
+rotation continue in the old segment. Damaged candidate IDRs are skipped.
 
 The writer owns all of these details:
 

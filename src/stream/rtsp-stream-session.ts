@@ -231,7 +231,7 @@ export class RtspStreamSession extends EventEmitter {
       client.once('disconnect', (error: Error) => disconnect?.(error));
       try {
         const session = await client.connect();
-        this.configureSession(session);
+        this.configureSession(session, connectedOnce);
         sessionReady = true;
         for (const frame of queuedFrames) this.handleFrame(frame);
         queuedFrames.length = 0;
@@ -264,7 +264,7 @@ export class RtspStreamSession extends EventEmitter {
     }
   }
 
-  private configureSession(session: RtspClientSession): void {
+  private configureSession(session: RtspClientSession, reconnect: boolean): void {
     this.tracksValue = tracksFromSession(session);
     const video = this.tracksValue.find((track) => track.mediaType === 'video');
     this.assembler = video === undefined ? undefined : new H264AccessUnitAssembler({
@@ -275,7 +275,7 @@ export class RtspStreamSession extends EventEmitter {
     this.videoReorder = new RtpReorderBuffer<MediaPacket>(4);
     this.videoSsrc = undefined;
     this.videoTimestamp = undefined;
-    this.discontinuityPending = true;
+    this.discontinuityPending = reconnect;
     if (this.pauseCount > 0) this.currentClient?.pauseMedia();
   }
 
@@ -291,6 +291,17 @@ export class RtspStreamSession extends EventEmitter {
       const rtcpSenderReport = track?.rtcpChannel === frame.channel
         ? findRtcpSenderReport(frame.payload)
         : undefined;
+      let videoDiscontinuity = false;
+      if (track?.mediaType === 'video' && rtp !== undefined) {
+        let timestampDelta = this.videoTimestamp === undefined
+          ? 0
+          : rtp.timestamp - this.videoTimestamp;
+        if (timestampDelta > 0x8000_0000) timestampDelta -= 0x1_0000_0000;
+        else if (timestampDelta < -0x8000_0000) timestampDelta += 0x1_0000_0000;
+        videoDiscontinuity = this.discontinuityPending
+          || (this.videoSsrc !== undefined && this.videoSsrc !== rtp.ssrc)
+          || timestampDelta * 1000 / track.clockRate < -5_000;
+      }
       const packet: MediaPacket = {
         arrivalTimeMs,
         ...(track === undefined ? {} : { track }),
@@ -299,7 +310,7 @@ export class RtspStreamSession extends EventEmitter {
         frame,
         ...(rtp === undefined ? {} : { rtp }),
         ...(rtcpSenderReport === undefined ? {} : { rtcpSenderReport }),
-        discontinuity: false,
+        discontinuity: videoDiscontinuity,
       };
       for (const subscriber of this.packetSubscribers) {
         try {
@@ -315,13 +326,7 @@ export class RtspStreamSession extends EventEmitter {
   }
 
   private handleVideoPacket(packet: MediaPacket, rtp: RtpPacket): void {
-    let timestampDelta = this.videoTimestamp === undefined ? 0 : rtp.timestamp - this.videoTimestamp;
-    if (timestampDelta > 0x8000_0000) timestampDelta -= 0x1_0000_0000;
-    else if (timestampDelta < -0x8000_0000) timestampDelta += 0x1_0000_0000;
-    const track = packet.track;
-    const discontinuity = (this.videoSsrc !== undefined && this.videoSsrc !== rtp.ssrc)
-      || (track !== undefined && timestampDelta * 1000 / track.clockRate < -5_000);
-    if (discontinuity) {
+    if (packet.discontinuity) {
       this.videoReorder.reset();
       this.discontinuityPending = true;
     }
@@ -329,7 +334,7 @@ export class RtspStreamSession extends EventEmitter {
     this.videoTimestamp = rtp.timestamp;
     const result = this.videoReorder.push(rtp.sequenceNumber, {
       ...packet,
-      discontinuity: discontinuity || this.discontinuityPending,
+      discontinuity: packet.discontinuity || this.discontinuityPending,
     });
     for (const ordered of result.packets) {
       this.discontinuityPending = false;
