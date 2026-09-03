@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import test from 'node:test';
 
 const packageEntrypoints = [
@@ -32,4 +34,19 @@ test('every public entrypoint supports import and require', async () => {
       `${entrypoint} exposes different ESM and CommonJS APIs`,
     );
   }
+});
+
+test('CommonJS output keeps a literal libav addon require for pkg', () => {
+  const commonJsRuntime = readFileSync(
+    join(
+      process.cwd(),
+      'dist/cjs/frame-extractor/scrypted-libav-runtime.js',
+    ),
+    'utf8',
+  );
+
+  assert.match(
+    commonJsRuntime,
+    /require\(["']@scrypted\/libav\/build\/Release\/addon\.node["']\)/,
+  );
 });

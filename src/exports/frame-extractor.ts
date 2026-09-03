@@ -17,6 +17,7 @@ export {
 export {
   createScryptedLibavRuntime,
   isScryptedLibavAvailable,
+  preloadScryptedLibavNativeAddon,
 } from '../frame-extractor/scrypted-libav-runtime.js';
 export {
   SharedRtspFrameExtractor,

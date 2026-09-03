@@ -91,6 +91,31 @@ recording, and playback do not load its native binary. Importing
 `ain-nvr/frame-extractor` also does not load it until `runtime.initialize()` or
 an extractor is started.
 
+### Packaging with `pkg`
+
+`createScryptedLibavRuntime().initialize()` detects a `pkg` executable and
+automatically preloads the native addon through a literal `require`. This lets
+`pkg` discover the otherwise dynamically resolved addon and load it from the
+executable cache. Applications normally do not need to call the public
+`preloadScryptedLibavNativeAddon()` function themselves.
+
+The consuming application must still include the platform addon in its own
+`pkg.assets` configuration because a dependency cannot reliably control the
+root application's asset list:
+
+```json
+{
+  "pkg": {
+    "assets": [
+      "node_modules/@scrypted/libav/build/Release/addon.node"
+    ]
+  }
+}
+```
+
+Build the package on the same operating system and architecture as the target.
+Do not use a `linuxstatic` target because native addons require dynamic loading.
+
 ## Public entrypoints
 
 | Import | Purpose |
