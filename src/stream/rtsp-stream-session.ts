@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 
 import type { Logger } from '../logging/logger.js';
+import { AinNvrError } from '../shared/ain-nvr-error.js';
 import type { TrackDescription } from '../media/track-description.js';
 import { H264AccessUnitAssembler, type H264AccessUnit } from '../playback/access-unit-assembler.js';
 import { createH264CodecConfiguration } from '../rtp/h264-configuration.js';
@@ -20,6 +21,8 @@ const NOOP_LOGGER: Logger = {
 export type SessionState = 'idle' | 'connecting' | 'streaming' | 'reconnecting' | 'stopped';
 
 export interface MediaPacket {
+  /** Present on live-session packets; optional for custom/recorded sources. */
+  readonly sessionGeneration?: number;
   readonly arrivalTimeMs: number;
   readonly track?: TrackDescription;
   readonly channel: number;
@@ -61,6 +64,11 @@ export interface RtspSessionInfo {
   readonly tracks: readonly RtspSessionTrackInfo[];
 }
 
+export interface RtspSessionSnapshot {
+  readonly generation: number;
+  readonly sessionInfo: RtspSessionInfo;
+}
+
 type PacketSubscriber = (packet: MediaPacket) => void;
 type AccessUnitSubscriber = (accessUnit: H264AccessUnit) => void;
 
@@ -75,12 +83,16 @@ function positiveInteger(value: number | undefined, fallback: number, name: stri
 function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.reject(signal.reason);
   return new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(resolve, milliseconds);
+    const timeout = setTimeout(() => {
+      signal.removeEventListener('abort', aborted);
+      resolve();
+    }, milliseconds);
     timeout.unref();
-    signal.addEventListener('abort', () => {
+    const aborted = (): void => {
       clearTimeout(timeout);
       reject(signal.reason);
-    }, { once: true });
+    };
+    signal.addEventListener('abort', aborted, { once: true });
   });
 }
 
@@ -160,6 +172,8 @@ export class RtspStreamSession extends EventEmitter {
   private videoTimestamp: number | undefined;
   private discontinuityPending = false;
   private pauseCount = 0;
+  private snapshotValue: RtspSessionSnapshot | undefined;
+  private readonly sessionSubscribers = new Set<(snapshot: RtspSessionSnapshot) => void>();
 
   constructor(private readonly options: RtspStreamSessionOptions) {
     super();
@@ -186,6 +200,16 @@ export class RtspStreamSession extends EventEmitter {
     return this.tracksValue;
   }
 
+  get snapshot(): RtspSessionSnapshot | undefined {
+    return this.snapshotValue;
+  }
+
+  /** Notifications precede all media for the new generation; not replayed. */
+  subscribeSessionChanges(subscriber: (snapshot: RtspSessionSnapshot) => void): () => void {
+    this.sessionSubscribers.add(subscriber);
+    return () => this.sessionSubscribers.delete(subscriber);
+  }
+
   /** Available after start(), or RtspSessionManager.acquire(), resolves. */
   get sessionInfo(): RtspSessionInfo {
     if (this.sessionInfoValue === undefined) {
@@ -195,12 +219,16 @@ export class RtspStreamSession extends EventEmitter {
   }
 
   async start(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) throw signal.reason;
+    if (this.stopController.signal.aborted) throw this.stopController.signal.reason;
     if (this.runPromise !== undefined) {
       if (this.stateValue === 'streaming') return;
       await this.waitForStreaming(signal);
       return;
     }
-    this.runPromise = this.run();
+    this.runPromise = this.run().finally(() => this.setState('stopped'));
+    // A failed client factory must reject waiters, not leave an unhandled run promise.
+    void this.runPromise.catch(() => undefined);
     await this.waitForStreaming(signal);
   }
 
@@ -255,6 +283,7 @@ export class RtspStreamSession extends EventEmitter {
       client.once('disconnect', (error: Error) => disconnect?.(error));
       try {
         const session = await client.connect();
+        if (this.stopController.signal.aborted) break;
         this.configureSession(session, connectedOnce);
         sessionReady = true;
         for (const frame of queuedFrames) this.handleFrame(frame);
@@ -302,6 +331,17 @@ export class RtspStreamSession extends EventEmitter {
     this.videoTimestamp = undefined;
     this.discontinuityPending = reconnect;
     if (this.pauseCount > 0) this.currentClient?.pauseMedia();
+    this.snapshotValue = {
+      generation: (this.snapshotValue?.generation ?? 0) + 1,
+      sessionInfo: this.sessionInfoValue,
+    };
+    for (const subscriber of this.sessionSubscribers) {
+      try {
+        subscriber(this.snapshotValue);
+      } catch (error) {
+        this.emit('subscriber-error', error instanceof Error ? error : new Error(String(error)));
+      }
+    }
   }
 
   private handleFrame(frame: RtspInterleavedFrame): void {
@@ -328,6 +368,7 @@ export class RtspStreamSession extends EventEmitter {
           || timestampDelta * 1000 / track.clockRate < -5_000;
       }
       const packet: MediaPacket = {
+        sessionGeneration: this.snapshotValue!.generation,
         arrivalTimeMs,
         ...(track === undefined ? {} : { track }),
         channel: frame.channel,
@@ -390,15 +431,22 @@ export class RtspStreamSession extends EventEmitter {
   }
 
   private waitForStreaming(signal?: AbortSignal): Promise<void> {
-    if (this.stateValue === 'streaming') return Promise.resolve();
     if (signal?.aborted) return Promise.reject(signal.reason);
+    if (this.stopController.signal.aborted || this.stateValue === 'stopped') {
+      return Promise.reject(new Error('RTSP stream session stopped.'));
+    }
+    if (this.stateValue === 'streaming') return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
       const ready = (): void => finish(resolve);
       const stopped = (): void => finish(() => reject(new Error('RTSP stream session stopped.')));
       const aborted = (): void => finish(() => reject(signal?.reason));
+      const initialError = (error: Error): void => {
+        if (error instanceof AinNvrError && error.code === 'unsupported_codec') finish(() => reject(error));
+      };
       const finish = (action: () => void): void => {
         this.removeListener('ready', ready);
         this.removeListener('state', stateChanged);
+        this.removeListener('initial-error', initialError);
         signal?.removeEventListener('abort', aborted);
         action();
       };
@@ -407,6 +455,7 @@ export class RtspStreamSession extends EventEmitter {
       };
       this.once('ready', ready);
       this.on('state', stateChanged);
+      this.on('initial-error', initialError);
       signal?.addEventListener('abort', aborted, { once: true });
     });
   }
@@ -415,15 +464,18 @@ export class RtspStreamSession extends EventEmitter {
 interface ManagedSession {
   readonly session: RtspStreamSession;
   leases: number;
-  readonly startPromise: Promise<void>;
 }
 
 export class RtspSessionManager {
   private readonly sessions = new Map<string, ManagedSession>();
+  private stopped = false;
+  private stopPromise: Promise<void> | undefined;
 
   constructor(private readonly options: RtspSessionManagerOptions = {}) {}
 
   async acquire(input: { readonly url: string; readonly signal?: AbortSignal }): Promise<RtspSessionLease> {
+    if (this.stopped) throw new Error('RTSP session manager stopped.');
+    if (input.signal?.aborted) throw input.signal.reason;
     const key = input.url;
     let managed = this.sessions.get(key);
     if (managed === undefined) {
@@ -440,12 +492,15 @@ export class RtspSessionManager {
           ? {}
           : { clientFactory: this.options.clientFactory }),
       });
-      managed = { session, leases: 0, startPromise: session.start(input.signal) };
+      managed = { session, leases: 0 };
       this.sessions.set(key, managed);
     }
     managed.leases += 1;
     try {
-      await managed.startPromise;
+      // Each caller waits independently. Only the final reference stops the session.
+      await managed.session.start(input.signal);
+      if (input.signal?.aborted) throw input.signal.reason;
+      if (this.stopped) throw new Error('RTSP session manager stopped.');
     } catch (error) {
       await this.release(key, managed);
       throw error;
@@ -466,9 +521,16 @@ export class RtspSessionManager {
   }
 
   async stop(): Promise<void> {
+    if (this.stopPromise !== undefined) return this.stopPromise;
+    this.stopped = true;
     const sessions = [...this.sessions.values()];
     this.sessions.clear();
-    await Promise.all(sessions.map(async (managed) => managed.session.stop()));
+    this.stopPromise = Promise.allSettled(sessions.map(async (managed) => managed.session.stop()))
+      .then((results) => {
+        const failures = results.filter((result) => result.status === 'rejected');
+        if (failures.length) throw new AggregateError(failures.map((result) => result.reason), 'RTSP shutdown failed.');
+      });
+    return this.stopPromise;
   }
 
   private async release(key: string, managed: ManagedSession): Promise<void> {

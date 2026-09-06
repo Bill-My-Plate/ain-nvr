@@ -35,6 +35,34 @@ function keyPayload(): Buffer {
   ]);
 }
 
+test('batch completion follows indexes including empty batches and preserves writer causes', async () => {
+  let subscriber: ((packet: MediaPacket) => void) | undefined;
+  const order: string[] = [];
+  const source: RecordingPacketSource = {
+    subscribeMediaPackets: (callback) => { subscriber = callback; return () => { subscriber = undefined; }; },
+    pauseMedia: () => undefined, resumeMedia: () => undefined,
+  };
+  const pipeline = new RecordingPipeline({
+    source, tracks: [videoTrack], decoderSafeBoundaries: true,
+    writer: { write: async () => { order.push('write'); return 0; } },
+    onIndexEvents: async () => { order.push('index'); },
+    onBatchComplete: async () => { order.push('batch'); },
+  });
+  pipeline.start();
+  subscriber!(mediaPacket(1, 90_000, Buffer.from([0x61, 1])));
+  subscriber!(mediaPacket(2, 93_600, keyPayload()));
+  await pipeline.stop();
+  assert.equal(order[0], 'batch');
+  assert.equal(order.filter((item) => item === 'batch').length, 3);
+  assert.equal(order[order.indexOf('index') + 1], 'batch');
+
+  const cause = Object.assign(new Error('Disk full'), { code: 'ENOSPC' });
+  const parser = new RecordingParser({ tracks: [videoTrack] });
+  await assert.rejects(parser.process(mediaPacket(1, 90_000, keyPayload()), {
+    write: async () => { throw cause; },
+  }), (error: unknown) => error instanceof Error && error.cause === cause);
+});
+
 test('recording parser returns semantic indexes with host-owned opaque locations', async () => {
   type Location = { readonly cacheKey: string; readonly byteOffset: number };
   const writes: RecordingWriteRequest[] = [];

@@ -368,3 +368,24 @@ npm pack --dry-run
 The TypeScript bindings in this repository are MIT licensed. The required
 native libav/FFmpeg dependency has its own LGPL and component license terms.
 This statement describes the dependency boundary; it is not legal advice.
+# Recording lifecycle contracts (0.1.6)
+
+Session-manager acquisition is cancellable per consumer. Aborting a pending lease
+does not cancel another consumer's wait. Release each successful lease once it is
+no longer needed; the last reference closes the camera connection. A stopped
+manager rejects new acquisitions.
+
+`RtspStreamSession.snapshot` contains the current `generation` and `sessionInfo`.
+`subscribeSessionChanges(listener)` announces each new negotiated snapshot before
+any packets from that generation, including setup-buffered packets. The callback
+is synchronous and is not replayed; subscribe first, then read `snapshot`.
+Live `MediaPacket` values include `sessionGeneration`. Custom and recorded packet
+sources may omit it for compatibility. Consumers must reject mismatched
+generations or recreate their parser before accepting changed tracks.
+
+`RecordingPipeline` accepts an optional awaited `onBatchComplete` callback. It
+runs after the parser's index callbacks for each successful processing or flush
+batch, even when no index events were produced. A host writer can rotate a file
+inside `write`, retain the old file as pending, and publish it only after this
+callback. Do not publish failed/incompletely drained segments as complete.
+Disk layout, metadata publication, retention and recovery policy remain host-owned.

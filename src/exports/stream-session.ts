@@ -4,6 +4,7 @@ export {
   type MediaPacket,
   type RtspSessionLease,
   type RtspSessionInfo,
+  type RtspSessionSnapshot,
   type RtspSessionManagerOptions,
   type RtspSessionTrackInfo,
   type RtspStreamSessionOptions,

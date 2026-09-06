@@ -1,6 +1,7 @@
 import { EventEmitter, once } from 'node:events';
 import net, { type Socket } from 'node:net';
 import tls from 'node:tls';
+import { AinNvrError } from '../shared/ain-nvr-error.js';
 
 import {
   createRtspAuthorization,
@@ -233,7 +234,7 @@ export class RtspClient extends EventEmitter {
       const description = parseSdp(sdp);
       const selected = selectH264VideoMedia(description);
       if (selected === undefined || !selected.media.control) {
-        throw new RtspClientError('DESCRIBE response has no controlled H.264 video track.');
+        throw new AinNvrError('unsupported_codec', 'DESCRIBE response has no controlled H.264 video track.');
       }
       const contentBase = getRtspHeader(describe, 'content-base')
         ?? getRtspHeader(describe, 'content-location');

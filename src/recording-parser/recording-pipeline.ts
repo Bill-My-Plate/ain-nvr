@@ -21,6 +21,8 @@ export interface RecordingPipelineOptions<TLocation> extends RecordingParserOpti
     events: readonly RecordingIndexEvent<TLocation>[],
   ) => Promise<void> | void;
   readonly onError?: (error: Error) => void;
+  /** Runs after all index callbacks, even for an empty successful batch. */
+  readonly onBatchComplete?: () => Promise<void> | void;
   readonly pauseAtBytes?: number;
   readonly resumeAtBytes?: number;
   readonly maximumQueuedBytes?: number;
@@ -157,10 +159,12 @@ export class RecordingPipeline<TLocation> {
       const events = await this.parser.process(packet, this.options.writer);
       this.writtenPackets += 1;
       if (events.length > 0) await this.options.onIndexEvents?.(events);
+      if (this.status.state !== 'failed') await this.options.onBatchComplete?.();
     }
     if (this.stateValue !== 'failed') {
       const events = await this.parser.flush(this.options.writer);
       if (events.length > 0) await this.options.onIndexEvents?.(events);
+      if (this.status.state !== 'failed') await this.options.onBatchComplete?.();
     }
   }
 
