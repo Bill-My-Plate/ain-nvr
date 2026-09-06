@@ -10,6 +10,7 @@ type LibavModule = typeof import('@scrypted/libav');
 type PkgProcess = NodeJS.Process & { pkg?: unknown };
 
 let loadedModule: LibavModule | undefined;
+let preloadedModule: LibavModule | undefined;
 let initialization: Promise<void> | undefined;
 
 /**
@@ -17,18 +18,25 @@ let initialization: Promise<void> | undefined;
  * Normal Node.js applications do not need to call this directly. The libav
  * runtime calls it automatically when it detects a pkg executable.
  */
-export function preloadScryptedLibavNativeAddon(): void {
+export function preloadScryptedLibavNativeAddon(): LibavModule {
+  if (preloadedModule !== undefined) {
+    return preloadedModule;
+  }
+
   if (typeof require === 'function') {
     const libav = require('@scrypted/libav') as LibavModule;
     const addon = require('@scrypted/libav/build/Release/addon.node');
     libav.loadAddon(undefined, (() => addon) as unknown as NodeRequire);
-    return;
+    preloadedModule = libav;
+    return libav;
   }
 
   const nodeRequire = createRequire(import.meta.url);
   const libav = nodeRequire('@scrypted/libav') as LibavModule;
   const addon = nodeRequire('@scrypted/libav/build/Release/addon.node');
   libav.loadAddon(undefined, (() => addon) as unknown as NodeRequire);
+  preloadedModule = libav;
+  return libav;
 }
 
 export function isScryptedLibavAvailable(): boolean {
@@ -50,19 +58,20 @@ export function createScryptedLibavRuntime(): LibavRuntime {
     },
     async initialize(): Promise<void> {
       initialization ??= (async () => {
+        let libav: LibavModule;
         if (Boolean((process as PkgProcess).pkg)) {
-          preloadScryptedLibavNativeAddon();
+          libav = preloadScryptedLibavNativeAddon();
+        } else {
+          try {
+            libav = await import('@scrypted/libav');
+          } catch (error) {
+            throw new Error(
+              'Required @scrypted/libav dependency is not installed or could not be loaded.',
+              { cause: error },
+            );
+          }
         }
 
-        let libav: LibavModule;
-        try {
-          libav = await import('@scrypted/libav');
-        } catch (error) {
-          throw new Error(
-            'Required @scrypted/libav dependency is not installed or could not be loaded.',
-            { cause: error },
-          );
-        }
         await libav.install();
         libav.setAVLogLevel('error');
         loadedModule = libav;

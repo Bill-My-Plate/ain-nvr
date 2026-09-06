@@ -49,4 +49,8 @@ test('CommonJS output keeps a literal libav addon require for pkg', () => {
     commonJsRuntime,
     /require\(["']@scrypted\/libav\/build\/Release\/addon\.node["']\)/,
   );
+  assert.match(
+    commonJsRuntime,
+    /if \(Boolean\(process\.pkg\)\) \{\s+libav = preloadScryptedLibavNativeAddon\(\);\s+\} else \{/,
+  );
 });
