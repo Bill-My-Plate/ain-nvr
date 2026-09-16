@@ -132,7 +132,7 @@ Do not use a `linuxstatic` target because native addons require dynamic loading.
 | `ain-nvr/playback-wire` | Optional browser control and binary message helpers |
 | `ain-nvr/frame-extractor` | URL or shared-session libav-to-JPEG extraction |
 | `ain-nvr/rtp-forwarder` | Bounded UDP forwarding building block |
-| `ain-nvr/rtsp-bridge` | Loopback RTSP bridge for decoding a shared session |
+| `ain-nvr/rtsp-bridge` | Tokenized loopback RTSP bridges for live sessions and recorded playback |
 
 Only these entrypoints are public. Importing paths under `dist` is not
 supported.
@@ -295,6 +295,35 @@ stops at explicit recording gaps, reports configuration changes, and emits:
 
 The package does not create WebSockets or browser decoders. The application may
 use `ain-nvr/playback-wire` or translate messages to its existing protocol.
+
+`PlaybackRtspBridge` adapts the same playback stream to a temporary RTSP/TCP
+URL for a local media process. It copies Annex-B H.264 into RTP and exposes
+decoded G.711 audio as L16. The server binds only to `127.0.0.1`, uses an
+unguessable path, enforces bounded socket queues, and stops at `endTimeMs`.
+The host still owns FFmpeg, output containers, files, retries, and cleanup:
+
+```ts
+const bridge = new PlaybackRtspBridge({
+  playback: createPlaybackStream({
+    source: playbackSource,
+    cameraId,
+    startTimeMs,
+    signal,
+  }),
+  endTimeMs,
+  audioSampleRate: 8_000,
+  signal,
+});
+
+try {
+  const { url, requestedStartTimeMs, actualStartTimeMs } = await bridge.start();
+  const mediaProcess = startLocalMediaProcess(url);
+  await bridge.run();
+  await mediaProcess;
+} finally {
+  await bridge.stop();
+}
+```
 
 ## JPEG frame extraction
 

@@ -5,6 +5,7 @@ export interface PcmAudioAccessUnit {
   readonly timestampUs: number;
   readonly wallClockTimeMs: number;
   readonly durationUs: number;
+  readonly sampleFormat: 's16le';
   readonly sampleRate: number;
   readonly channels: 1;
   readonly data: Buffer;
@@ -60,6 +61,7 @@ export function createG711AccessUnit(
     timestampUs: Math.max(0, Math.round((wallClockTimeMs - playbackStartTimeMs) * 1000)),
     wallClockTimeMs,
     durationUs: Math.round(rtp.payload.length * 1_000_000 / track.clockRate),
+    sampleFormat: 's16le',
     sampleRate: track.clockRate,
     channels: 1,
     data: decodeG711Payload(rtp.payload, track.codec),
