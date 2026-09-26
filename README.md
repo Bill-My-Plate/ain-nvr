@@ -293,6 +293,9 @@ stops at explicit recording gaps, reports configuration changes, and emits:
 - `configuration` before a changed keyframe;
 - `end` with a clear reason.
 
+Complete pending video frames and buffered startup audio are emitted before
+ending at a recording gap or session change. Incomplete frames remain excluded.
+
 The package does not create WebSockets or browser decoders. The application may
 use `ain-nvr/playback-wire` or translate messages to its existing protocol.
 
@@ -300,6 +303,8 @@ use `ain-nvr/playback-wire` or translate messages to its existing protocol.
 URL for a local media process. It copies Annex-B H.264 into RTP and exposes
 decoded G.711 audio as L16. The server binds only to `127.0.0.1`, uses an
 unguessable path, enforces bounded socket queues, and stops at `endTimeMs`.
+Its PLAY response maps each RTP clock to the same playback origin using
+`RTP-Info`, preserving audio that starts later than the first video frame.
 The host still owns FFmpeg, output containers, files, retries, and cleanup:
 
 ```ts

@@ -55,7 +55,10 @@ class RtspTestClient {
 
   private async waitForData(): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Timed out waiting for RTSP data.')), 2_000);
+      const timeout = setTimeout(
+        () => reject(new Error('Timed out waiting for RTSP data.')),
+        2_000,
+      );
       const closed = (): void => {
         clearTimeout(timeout);
         reject(new Error('RTSP test client closed.'));
@@ -137,32 +140,34 @@ test('playback bridge serves token-scoped H.264 and L16 until the selected end',
     });
     const client = new RtspTestClient(socket);
 
-    const rejected = await client.request(request(
-      'DESCRIBE',
-      `${parsedUrl.protocol}//${parsedUrl.host}/wrong-token`,
-      1,
-    ));
+    const rejected = await client.request(
+      request('DESCRIBE', `${parsedUrl.protocol}//${parsedUrl.host}/wrong-token`, 1),
+    );
     assert.match(rejected.toString('ascii'), /RTSP\/1\.0 404 Not Found/u);
     const describe = await client.request(request('DESCRIBE', started.url, 2));
     assert.match(describe.toString('utf8'), /a=rtpmap:96 H264\/90000/u);
     assert.match(describe.toString('utf8'), /a=rtpmap:97 L16\/8000\/1/u);
-    const videoSetup = await client.request(request(
-      'SETUP',
-      `${started.url}/trackID=0`,
-      3,
-      'Transport: RTP/AVP/TCP;unicast;interleaved=4-5\r\n',
-    ));
+    const videoSetup = await client.request(
+      request(
+        'SETUP',
+        `${started.url}/trackID=0`,
+        3,
+        'Transport: RTP/AVP/TCP;unicast;interleaved=4-5\r\n',
+      ),
+    );
     assert.match(videoSetup.toString('ascii'), /interleaved=4-5/u);
-    const audioSetup = await client.request(request(
-      'SETUP',
-      `${started.url}/trackID=1`,
-      4,
-      'Transport: RTP/AVP/TCP;unicast;interleaved=6-7\r\n',
-    ));
+    const audioSetup = await client.request(
+      request(
+        'SETUP',
+        `${started.url}/trackID=1`,
+        4,
+        'Transport: RTP/AVP/TCP;unicast;interleaved=6-7\r\n',
+      ),
+    );
     assert.match(audioSetup.toString('ascii'), /interleaved=6-7/u);
 
     const running = bridge.run();
-    await client.request(request('PLAY', started.url, 5));
+    const play = await client.request(request('PLAY', started.url, 5));
     const videoFrame = await client.readInterleavedFrame();
     const audioFrame = await client.readInterleavedFrame();
     await running;
@@ -171,6 +176,22 @@ test('playback bridge serves token-scoped H.264 and L16 until the selected end',
     assert.deepEqual(parseRtpPacket(videoFrame.subarray(4)).payload, Buffer.from([0x65, 1, 2]));
     assert.equal(audioFrame[1], 6);
     assert.deepEqual(parseRtpPacket(audioFrame.subarray(4)).payload, Buffer.from([0x12, 0x34]));
+    const rtpInfo = /RTP-Info: ([^\r\n]+)/u.exec(play.toString('ascii'))?.[1];
+    assert.ok(rtpInfo, 'PLAY must map both RTP clocks to npt=0');
+    for (const [track, frame, offset] of [
+      [0, videoFrame, 0],
+      [1, audioFrame, 80],
+    ] as const) {
+      const entry: string | undefined = rtpInfo
+        .split(',')
+        .find((value) => value.startsWith('url=' + started.url + '/trackID=' + track + ';'));
+      assert.ok(entry);
+      const sequence: number = Number(/seq=(\d+)/u.exec(entry)?.[1]);
+      const origin: number = Number(/rtptime=(\d+)/u.exec(entry)?.[1]);
+      const packet = parseRtpPacket(frame.subarray(4));
+      assert.equal(packet.sequenceNumber, sequence);
+      assert.equal((packet.timestamp - origin) >>> 0, offset);
+    }
   } finally {
     socket?.destroy();
     await bridge.stop();
@@ -192,12 +213,14 @@ test('playback bridge rejects packets beyond its client queue bound', async () =
       socket?.once('error', reject);
     });
     const client = new RtspTestClient(socket);
-    await client.request(request(
-      'SETUP',
-      `${started.url}/trackID=0`,
-      1,
-      'Transport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n',
-    ));
+    await client.request(
+      request(
+        'SETUP',
+        `${started.url}/trackID=0`,
+        1,
+        'Transport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n',
+      ),
+    );
     const rejected = assert.rejects(bridge.run(), /media queue limit/u);
     await client.request(request('PLAY', started.url, 2));
     await rejected;

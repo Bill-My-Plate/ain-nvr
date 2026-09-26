@@ -188,7 +188,11 @@ export async function* createPlaybackStream<TSegmentRef>(
     }
 
     const next = await options.source.nextSegment(segment.ref, options.signal);
-    if (next === undefined) {
+    // A terminating boundary cannot supply the next timestamp that normally
+    // releases the pending access unit. Flush it exactly as at recording EOF.
+    // Continuous segments may split a FU-A, so never flush between those.
+    if (next === undefined || next.sessionId !== segment.sessionId
+      || next.startTimeMs - segment.endTimeMs > maximumGapMs) {
       for (const unit of assembler.flush()) {
         const wasReady = ready;
         for (const message of consumeVideoUnit(unit)) yield message;
@@ -196,6 +200,8 @@ export async function* createPlaybackStream<TSegmentRef>(
           for (const audio of pendingAudio.splice(0)) yield audio;
         }
       }
+    }
+    if (next === undefined) {
       if (!ready) {
         throw assembler.configuration === undefined
           ? new PlaybackMediaError(

@@ -30,6 +30,12 @@ async function* prependMessage(
 }
 
 export class PlaybackRtspBridge {
+  // FFmpeg treats an RTP-Info origin of zero as unset. A small nonzero origin
+  // also avoids wrapping before a delayed track sends its first packet.
+  private readonly videoPacketizer = new RtpPacketizer({
+    payloadType: 96, clockRate: 90_000, initialTimestamp: 1,
+  });
+  private readonly audioPacketizer: RtpPacketizer | undefined;
   private server: PlaybackRtspServer | undefined;
   private firstVideo: PlaybackVideoMessage | undefined;
   private startValue: PlaybackRtspBridgeStart | undefined;
@@ -50,6 +56,11 @@ export class PlaybackRtspBridge {
       && (!Number.isSafeInteger(options.playTimeoutMs) || options.playTimeoutMs <= 0)) {
       throw new RangeError('playTimeoutMs must be a positive safe integer.');
     }
+    this.audioPacketizer = options.audioSampleRate === undefined
+      ? undefined
+      : new RtpPacketizer({
+        payloadType: 97, clockRate: options.audioSampleRate, initialTimestamp: 1,
+      });
   }
 
   get started(): PlaybackRtspBridgeStart | undefined {
@@ -91,6 +102,8 @@ export class PlaybackRtspBridge {
       this.firstVideo = firstVideo.value;
       this.server = new PlaybackRtspServer({
         configuration: ready.value.configuration,
+        videoRtpInfo: this.videoPacketizer,
+        ...(this.audioPacketizer === undefined ? {} : { audioRtpInfo: this.audioPacketizer }),
         ...(this.options.audioSampleRate === undefined
           ? {}
           : { audioSampleRate: this.options.audioSampleRate }),
@@ -139,10 +152,8 @@ export class PlaybackRtspBridge {
     server: PlaybackRtspServer,
     actualStartTimeMs: number,
   ): Promise<void> {
-    const video = new RtpPacketizer({ payloadType: 96, clockRate: 90_000 });
-    const audio = this.options.audioSampleRate === undefined
-      ? undefined
-      : new RtpPacketizer({ payloadType: 97, clockRate: this.options.audioSampleRate });
+    const video = this.videoPacketizer;
+    const audio = this.audioPacketizer;
     let sentVideo = false;
 
     for await (const message of playback) {

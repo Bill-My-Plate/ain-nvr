@@ -14,8 +14,15 @@ interface ClientState {
   playing: boolean;
 }
 
+interface PlaybackRtpInfo {
+  readonly initialSequenceNumber: number;
+  readonly initialTimestamp: number;
+}
+
 export interface PlaybackRtspServerOptions {
   readonly configuration: H264CodecConfiguration;
+  readonly videoRtpInfo: PlaybackRtpInfo;
+  readonly audioRtpInfo?: PlaybackRtpInfo;
   readonly audioSampleRate?: number;
   readonly logger?: Logger;
   readonly maximumQueuedBytes?: number;
@@ -241,6 +248,7 @@ export class PlaybackRtspServer {
         this.respond(client, request, 200, 'OK', {
           Session: client.sessionId,
           Range: 'npt=0.000-',
+          'RTP-Info': this.createRtpInfo(client),
         });
         client.playing = true;
         this.playResolve?.();
@@ -285,6 +293,16 @@ export class PlaybackRtspServer {
       'ascii',
     );
     client.socket.write(body.length === 0 ? header : Buffer.concat([header, body]));
+  }
+
+  private createRtpInfo(client: ClientState): string {
+    // Both timestamps describe the same npt=0 instant, not each track's first
+    // packet. Otherwise the client independently rebases delayed audio to zero.
+    return [...client.channels.keys()].flatMap((track) => {
+      const info = track === 0 ? this.options.videoRtpInfo : this.options.audioRtpInfo;
+      if (info === undefined) return [];
+      return [`url=${this.urlValue as string}/trackID=${track};seq=${info.initialSequenceNumber};rtptime=${info.initialTimestamp}`];
+    }).join(',');
   }
 
   private createSdp(): string {
