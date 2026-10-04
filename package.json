@@ -64,6 +64,9 @@
       ],
       "rtsp-bridge": [
         "dist/cjs/exports/rtsp-bridge.d.ts"
+      ],
+      "camera-runtime": [
+        "dist/cjs/exports/camera-runtime.d.ts"
       ]
     }
   },
@@ -197,13 +200,23 @@
         "types": "./dist/cjs/exports/rtsp-bridge.d.ts",
         "default": "./dist/cjs/exports/rtsp-bridge.js"
       }
+    },
+    "./camera-runtime": {
+      "import": {
+        "types": "./dist/esm/exports/camera-runtime.d.ts",
+        "default": "./dist/esm/exports/camera-runtime.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/camera-runtime.d.ts",
+        "default": "./dist/cjs/exports/camera-runtime.js"
+      }
     }
   },
   "scripts": {
     "build": "node ./scripts/build-dual.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "pretest": "npm run build",
-    "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js",
+    "test": "node ./scripts/run-tests.mjs",
     "prepare": "npm run build",
     "prepack": "npm run build",
     "prepublishOnly": "npm run check && npm test",

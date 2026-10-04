@@ -18,6 +18,7 @@ const packageEntrypoints = [
   'ain-nvr/frame-extractor',
   'ain-nvr/rtp-forwarder',
   'ain-nvr/rtsp-bridge',
+  'ain-nvr/camera-runtime',
 ] as const;
 
 const require = createRequire(import.meta.url);

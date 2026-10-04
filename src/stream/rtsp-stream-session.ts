@@ -270,19 +270,37 @@ export class RtspStreamSession extends EventEmitter {
       const client = this.clientFactory(this.options.url);
       this.currentClient = client;
       const queuedFrames: RtspInterleavedFrame[] = [];
+      let queuedBytes = 0;
+      let startupOverflow = false;
+      let overflowClose: Promise<void> | undefined;
       let sessionReady = false;
       let disconnect: ((error: Error) => void) | undefined;
       const disconnected = new Promise<Error>((resolve) => {
         disconnect = resolve;
       });
+      // RtspClient intentionally suppresses disconnect events during an explicit close.
+      // Wake run() on stop as well, otherwise session.stop waits on itself forever.
+      const stopped = (): void => disconnect?.(new Error('RTSP stream session stopped.'));
+      this.stopController.signal.addEventListener('abort', stopped, { once: true });
       const onFrame = (frame: RtspInterleavedFrame): void => {
-        if (!sessionReady) queuedFrames.push(frame);
+        if (!sessionReady) {
+          if (startupOverflow) return;
+          queuedBytes += frame.rawHeader.length + frame.payload.length;
+          if (queuedBytes > 8 * 1024 * 1024 || queuedFrames.length >= 4_096) {
+            startupOverflow = true;
+            queuedFrames.length = 0;
+            overflowClose = client.close().catch(() => undefined);
+            return;
+          }
+          queuedFrames.push(frame);
+        }
         else this.handleFrame(frame);
       };
       client.on('interleaved', onFrame);
       client.once('disconnect', (error: Error) => disconnect?.(error));
       try {
         const session = await client.connect();
+        if (startupOverflow) throw new Error('RTSP negotiation media buffer exceeded its limit.');
         if (this.stopController.signal.aborted) break;
         this.configureSession(session, connectedOnce);
         sessionReady = true;
@@ -310,7 +328,9 @@ export class RtspStreamSession extends EventEmitter {
         }
         delayMs = Math.min(delayMs * 2, this.reconnectMaximumMs);
       } finally {
+        this.stopController.signal.removeEventListener('abort', stopped);
         client.removeListener('interleaved', onFrame);
+        await overflowClose;
         await client.close().catch(() => undefined);
         if (this.currentClient === client) this.currentClient = undefined;
       }
@@ -441,7 +461,7 @@ export class RtspStreamSession extends EventEmitter {
       const stopped = (): void => finish(() => reject(new Error('RTSP stream session stopped.')));
       const aborted = (): void => finish(() => reject(signal?.reason));
       const initialError = (error: Error): void => {
-        if (error instanceof AinNvrError && error.code === 'unsupported_codec') finish(() => reject(error));
+        if (error instanceof AinNvrError && ['unsupported_codec', 'rtsp_authentication_failed', 'rtsp_unsupported_transport'].includes(error.code)) finish(() => reject(error));
       };
       const finish = (action: () => void): void => {
         this.removeListener('ready', ready);

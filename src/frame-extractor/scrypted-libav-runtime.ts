@@ -48,7 +48,7 @@ export function isScryptedLibavAvailable(): boolean {
   }
 }
 
-export function createScryptedLibavRuntime(): LibavRuntime {
+export function createScryptedLibavRuntime(options: { install?: boolean } = {}): LibavRuntime {
   return {
     get keyPacketFlag(): number {
       if (loadedModule === undefined) {
@@ -72,7 +72,10 @@ export function createScryptedLibavRuntime(): LibavRuntime {
           }
         }
 
-        await libav.install();
+        // Managed decoder processes must never race native binary installation.
+        // The package postinstall prepares assets; managed startup only loads them.
+        if (options.install === false) libav.loadAddon();
+        else await libav.install();
         libav.setAVLogLevel('error');
         loadedModule = libav;
       })();

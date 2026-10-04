@@ -46,6 +46,9 @@ interface PendingAccessUnit {
   readonly wallClockTimeMs: number;
   readonly nalUnits: Buffer[];
   damaged: boolean;
+  bytes: number;
+  packets: number;
+  overflowed: boolean;
   fu?: FuAssembly | undefined;
 }
 
@@ -111,8 +114,21 @@ export class H264AccessUnitAssembler {
       wallClockTimeMs: input.wallClockTimeMs,
       nalUnits: [],
       damaged: false,
+      bytes: 0,
+      packets: 0,
+      overflowed: false,
     };
     const pending = this.pending;
+    if (pending.overflowed) return output;
+    pending.bytes += rtp.payload.length;
+    if (pending.bytes > 8 * 1024 * 1024 || ++pending.packets > 4_096) {
+      pending.overflowed = true;
+      pending.damaged = true;
+      pending.nalUnits.length = 0;
+      pending.fu = undefined;
+      this.configurationTracker.resetFragments();
+      return output;
+    }
     if ((input.lostBefore ?? 0) > 0 && (pending.nalUnits.length > 0 || pending.fu !== undefined)) {
       pending.damaged = true;
       this.configurationTracker.resetFragments();

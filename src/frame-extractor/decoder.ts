@@ -110,6 +110,17 @@ export async function selectDecoder(
   logger: Logger,
 ): Promise<DecoderSelection> {
   const packets: LibavPacketLike[] = [];
+  let packetBytes = 0;
+  const started = Date.now();
+  const bufferPacket = (packet: LibavPacketLike): void => {
+    // Native AVPacket reports size; retain a conservative charge for custom runtimes.
+    packetBytes += packet.size ?? 65_536;
+    if (packets.length >= 256 || packetBytes > 8 * 1024 * 1024 || Date.now() - started > 10_000) {
+      packet.destroy();
+      throw new Error('Decoder selection exceeded its packet buffer or time limit.');
+    }
+    packets.push(packet);
+  };
   let lastError: unknown;
 
   try {
@@ -117,7 +128,7 @@ export async function selectDecoder(
     while (true) {
       signal.throwIfAborted();
       const packet = await context.readFrame();
-      signal.throwIfAborted();
+      if (signal.aborted) { packet?.destroy(); signal.throwIfAborted(); }
       if (packet === null || packet === undefined) {
         continue;
       }
@@ -128,7 +139,7 @@ export async function selectDecoder(
         packet.destroy();
         continue;
       }
-      packets.push(packet);
+      bufferPacket(packet);
       break;
     }
 
@@ -146,6 +157,7 @@ export async function selectDecoder(
         while (true) {
           signal.throwIfAborted();
           const frame = await decoder.receiveFrame();
+          if (signal.aborted) { frame?.destroy(); signal.throwIfAborted(); }
           if (frame !== null && frame !== undefined) {
             if (!isSaneFrame(frame)) {
               frame.destroy();
@@ -169,7 +181,7 @@ export async function selectDecoder(
             packet.destroy();
             continue;
           }
-          packets.push(packet);
+          bufferPacket(packet);
           await decoder.sendPacket(packet);
         }
       } catch (error) {

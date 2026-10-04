@@ -12,3 +12,5 @@ export {
   type RobustnessMetricName,
   type RobustnessMetricsSnapshot,
 } from './observability/robustness-metrics.js';
+
+export * from './exports/camera-runtime.js';

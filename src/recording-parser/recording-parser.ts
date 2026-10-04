@@ -98,6 +98,7 @@ interface OrderedInput {
 interface PendingSafeAccessUnit {
   readonly timestamp: number;
   readonly packets: OrderedInput[];
+  bytes: number;
   damaged: boolean;
   hasIdr: boolean;
   fuNalType: number | undefined;
@@ -507,7 +508,7 @@ export class RecordingParser<TLocation> {
 
     if (!isVideoRtp) {
       if (this.pendingSafeAccessUnit !== undefined) {
-        this.pendingSafeAccessUnit.packets.push(input);
+        this.bufferSafePacket(this.pendingSafeAccessUnit, input);
         return events;
       }
       if (this.safeBoundaryWritten) {
@@ -529,12 +530,13 @@ export class RecordingParser<TLocation> {
     this.pendingSafeAccessUnit ??= {
       timestamp: rtp.timestamp,
       packets: [],
+      bytes: 0,
       damaged: false,
       hasIdr: false,
       fuNalType: undefined,
     };
     const pending = this.pendingSafeAccessUnit;
-    pending.packets.push(input);
+    this.bufferSafePacket(pending, input);
     if (input.lostBefore > 0) {
       pending.damaged = true;
       this.safeConfigurationTracker?.resetFragments();
@@ -571,6 +573,16 @@ export class RecordingParser<TLocation> {
 
     if (rtp.marker) events.push(...await this.resolveSafeAccessUnit(writer));
     return events;
+  }
+
+  private bufferSafePacket(pending: PendingSafeAccessUnit, input: OrderedInput): void {
+    pending.bytes += input.packet.rawInterleavedFrame.length;
+    if (pending.bytes > 8 * 1024 * 1024 || pending.packets.length >= 4_096) {
+      this.pendingSafeAccessUnit = undefined;
+      this.safeConfigurationTracker?.resetFragments();
+      throw new AinNvrError('corrupt_media', 'Incomplete recording access unit exceeded its buffer limit.');
+    }
+    pending.packets.push(input);
   }
 
   private async resolveSafeAccessUnit(

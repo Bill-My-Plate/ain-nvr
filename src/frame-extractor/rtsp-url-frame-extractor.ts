@@ -309,7 +309,7 @@ export class RtspUrlFrameExtractor {
       while (!sessionController.signal.aborted) {
         if (processingFailure !== undefined) throw processingFailure;
         const item = await context.receiveFrame([{ streamIndex: stream.index, decoder }]);
-        sessionController.signal.throwIfAborted();
+        if (sessionController.signal.aborted) { item?.destroy(); sessionController.signal.throwIfAborted(); }
         if (processingFailure !== undefined) {
           item?.destroy();
           throw processingFailure;

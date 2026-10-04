@@ -27,6 +27,7 @@ interface FuAssembly {
   readonly timestamp: number;
   readonly nalType: number;
   readonly chunks: Buffer[];
+  bytes: number;
 }
 
 function findStartCodes(data: Buffer): StartCode[] {
@@ -145,12 +146,15 @@ export class H264ConfigurationTracker {
           timestamp,
           nalType,
           chunks: [Buffer.from([inspection.reconstructedFuHeader]), inspection.fuPayload],
+          bytes: 1 + inspection.fuPayload.length,
         };
       } else if (this.fu === undefined || this.fu.timestamp !== timestamp
         || this.fu.nalType !== nalType || inspection.fuPayload === undefined) {
         this.fu = undefined;
       } else {
-        this.fu.chunks.push(inspection.fuPayload);
+        this.fu.bytes += inspection.fuPayload.length;
+        if (this.fu.bytes > 8 * 1024 * 1024 || this.fu.chunks.length >= 4_096) this.fu = undefined;
+        else this.fu.chunks.push(inspection.fuPayload);
       }
       if (inspection.fuEnd && this.fu !== undefined) {
         this.captureBundle(Buffer.concat(this.fu.chunks));
