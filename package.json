@@ -1,6 +1,6 @@
 {
   "name": "ain-nvr",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "Framework-neutral RTSP, RTP, H.264, playback, and frame extraction primitives for Node.js",
   "keywords": [
     "nvr",
