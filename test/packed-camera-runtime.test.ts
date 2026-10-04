@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile, execFileSync, spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,8 +8,10 @@ import test from 'node:test';
 import { CameraServer } from './helpers/camera-server.js';
 
 const run = promisify(execFile);
+const runtimes = [process.execPath];
+if (spawnSync('bun', ['--version'], { stdio: 'ignore' }).status === 0) runtimes.push('bun');
 
-test('packed package starts native camera workers from unrelated cwd in ESM and CommonJS', { timeout: 40_000 }, async () => {
+test('packed package starts native camera workers from unrelated cwd in ESM and CommonJS on available runtimes', { timeout: 80_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'ain-packed-'));
   const server = new CameraServer();
   try {
@@ -48,10 +50,10 @@ try {
 } finally { await runtime.close(); }
 `);
     const url = await server.start();
-    for (const mode of ['esm', 'cjs']) {
-      const result = await run(process.execPath, [script, mode], {
+    for (const runtime of runtimes) for (const mode of ['esm', 'cjs']) {
+      const result = await run(runtime, [script, mode], {
         cwd: tmpdir(), timeout: 20_000, maxBuffer: 128 * 1024,
-        env: { ...process.env, CAMERA_URL: url, CACHE_ROOT: join(temporary, 'recordings', mode) },
+        env: { ...process.env, CAMERA_URL: url, CACHE_ROOT: join(temporary, 'recordings', runtime === 'bun' ? 'bun' : 'node', mode) },
       });
       assert.match(result.stdout, /PACKED_CAMERA_OK/);
     }

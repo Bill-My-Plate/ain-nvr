@@ -36,6 +36,8 @@ export class CameraWorkerHost {
     } catch (error) { port1.close(); port2.close(); throw error; }
     port1.on('message', (message: FrameMessage) => { if (message.epoch === epoch) onFrame(message); });
     port1.on('messageerror', error => this.fail(asError(error), false));
+    // Bun requires explicit startup for transferred MessageChannel traffic.
+    port1.start();
     this.worker.on('messageerror', error => this.fail(asError(error), false));
     this.worker.on('error', error => this.fail(error, false));
     this.worker.on('exit', code => {
@@ -98,9 +100,10 @@ export class CameraWorkerHost {
       let error: unknown;
       try {
         await this.request({ type: 'close' }, this.settings.shutdownTimeoutMs);
-        await deadline(this.exited.promise, this.settings.shutdownTimeoutMs, 'Camera worker did not exit after closing.');
       } catch (cause) { error = cause; }
       finally {
+        // The close response confirms recorder, decoder and socket cleanup.
+        // Explicitly end the thread: closing parentPort alone can keep Bun alive.
         if (!this.dead) await this.worker.terminate();
         await this.exited.promise;
         this.frames.close();

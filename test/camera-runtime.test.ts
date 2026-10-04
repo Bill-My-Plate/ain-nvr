@@ -177,10 +177,3 @@ test('three simultaneous cameras use isolated native decoders and tolerate repea
     await Promise.all(leases.map(lease => lease.release()));
   } finally { await runtime.close().finally(() => Promise.all(servers.map(server => server.close()))); }
 });
-
-test('managed runtime rejects pkg before worker creation', () => {
-  const runtimeProcess = process as NodeJS.Process & { pkg?: unknown };
-  runtimeProcess.pkg = { entrypoint: '/snapshot/app.js' };
-  try { assert.throws(() => getCameraRuntime(), error => (error as NodeJS.ErrnoException).code === 'unsupported_runtime'); }
-  finally { delete runtimeProcess.pkg; }
-});

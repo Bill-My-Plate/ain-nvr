@@ -3,7 +3,7 @@ import type { CommittedSegment } from '../recording-storage/metadata.js';
 
 export type { CommittedSegment } from '../recording-storage/metadata.js';
 
-/** Standard Node.js >=22 only. Limits apply to this context's shared managed registry. */
+/** Limits apply to this context's shared managed registry. */
 export interface CameraRuntimeOptions {
   readonly maxCameras?: number;
   readonly maxStartingCameras?: number;

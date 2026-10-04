@@ -110,8 +110,11 @@ test('decoder failure is scoped to frames while recording continues', { timeout:
     let commits = 0;
     const recording = await owner.startRecording({ cacheRoot: root, segmentDurationMs: 500,
       onCommitted: () => { commits++; }, onError: () => undefined });
-    const frame = await owner.startFrames({ onFrame: () => assert.fail('Oversized JPEG delivered'), onError: () => undefined });
-    await assert.rejects(frame.handle.ready, /deadline|JPEG|decoder|Decoder/);
+    const frameErrors: Error[] = [];
+    const frame = await owner.startFrames({ onFrame: () => assert.fail('Oversized JPEG delivered'), onError: error => frameErrors.push(error) });
+    // Native decoder error text varies by runtime. Verify propagation to the
+    // subscriber instead of depending on a particular libav error string.
+    await assert.rejects(frame.handle.ready, error => error instanceof Error && frameErrors.includes(error));
     const before = commits;
     await until(() => commits > before);
     assert.equal(owner.status.workerEpoch, 1);

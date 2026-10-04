@@ -69,6 +69,7 @@ export class CameraEngine {
       const frame = this.frames.get(ack.consumerId);
       if (frame?.sequence === ack.sequence) frame.awaiting = false;
     });
+    framePort.start();
     this.loopDelay.enable();
     this.timer = setInterval(() => {
       if (this.progressPending && this.recorder !== undefined && !this.statusPending) {

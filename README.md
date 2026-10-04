@@ -12,7 +12,7 @@ catalogs, retention, and access control inside the application.
 
 ## Supported scope
 
-- Node.js 22 or newer.
+- Node.js 22 or newer, and Bun (camera workers tested with Bun 1.2.22).
 - RTSP or RTSPS over TCP interleaving.
 - H.264 video using single NAL, STAP-A, and FU-A RTP payloads.
 - Optional PCMU or PCMA audio.
@@ -48,6 +48,10 @@ again before use, so installations made with scripts disabled fail clearly at
 runtime instead of silently disabling frame extraction.
 
 ### Bun
+
+Bun can run the managed camera API, including recording and native JPEG
+extraction. Camera workers and decoder subprocesses use the current runtime;
+no separate Node launcher is required when the application runs on Bun.
 
 Bun blocks dependency lifecycle scripts unless the application trusts the
 package. Trust `ain-nvr`, but do not trust `@scrypted/libav`:

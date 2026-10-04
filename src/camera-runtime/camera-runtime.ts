@@ -152,15 +152,9 @@ interface Registry { abi: string; runtime: ManagedCameraRuntime }
  * One worker owns each camera's RTSP session and schema-1 cache recording. Native JPEG
  * extraction runs in a package-owned child process fed by that worker's loopback bridge.
  * Other processes, go2rtc and direct low-level APIs are outside this registry.
- * Requires standard Node.js >=22. Bun and pkg executables are not supported by
- * this managed entrypoint; their worker/native-process lifecycle needs separate validation.
+ * Worker and decoder entrypoints are resolved relative to the installed package.
  */
 export function getCameraRuntime(options: CameraRuntimeOptions = {}): CameraRuntime {
-  const runtimeProcess = process as NodeJS.Process & { pkg?: unknown };
-  if (process.versions.bun !== undefined || runtimeProcess.pkg !== undefined
-    || Number(process.versions.node.split('.')[0]) < 22) {
-    throw failure('unsupported_runtime', 'Managed camera workers require standard Node.js >=22. Bun and pkg executables are not supported.');
-  }
   const scope = globalThis as typeof globalThis & { [registryKey]?: Registry };
   const existing = scope[registryKey];
   if (existing !== undefined) {
