@@ -1,4 +1,5 @@
 import { access } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { CameraWorkerHost } from './camera-worker-host.js';
 import { StartupLimiter } from './settings.js';
@@ -32,8 +33,12 @@ type Consumer = RecordingConsumer | FrameConsumer;
 let nativeAssets: Promise<void> | undefined;
 function verifyNativeAssets(): Promise<void> {
   nativeAssets ??= (async () => {
-    // Importing the JS wrapper does not load the native addon into the application.
-    const libav = await import('@scrypted/libav');
+    // pkg's CommonJS VM may not provide a dynamic import callback. Keep a
+    // literal require for pkg and resolve relative to this module in ESM.
+    // Only load the JS wrapper; the native addon belongs in the decoder child.
+    const libav = (typeof require === 'function'
+      ? require('@scrypted/libav')
+      : createRequire(import.meta.url)('@scrypted/libav')) as typeof import('@scrypted/libav');
     await access(libav.getAddonPath());
   })().catch(error => { nativeAssets = undefined; throw error; });
   return nativeAssets;
