@@ -4,6 +4,8 @@
 
 **Internal entrypoint:** [`index.ts`](index.ts) exposes Session manager, stream session, lifecycle types, and compatibility re-exports.
 
+**Folders:** [types/](types/) (types, interfaces, and enums), [utils/](utils/) (single-purpose functions), [services/](services/) (stateful classes), [constants/](constants/) (named constants).
+
 **Invariant:** Publish each negotiated generation snapshot before packets from that generation; close after the final lease.
 
 Cross-module imports use this module’s `index.ts`. The package’s published paths remain the facades in `src/exports/` and `src/index.ts`.

@@ -4,13 +4,13 @@ import { createRequire, Module } from 'node:module';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { runInThisContext } from 'node:vm';
-import type { CameraOwner } from '../src/camera-runtime/camera-owner.class.js';
-import { resolveSettings } from '../src/camera-runtime/resolve-settings.util.js';
-import { StartupLimiter } from '../src/camera-runtime/startup-limiter.class.js';
+import type { CameraOwner } from '../src/camera-runtime/services/camera-owner.class.js';
+import { resolveSettings } from '../src/camera-runtime/utils/resolve-settings.util.js';
+import { StartupLimiter } from '../src/camera-runtime/services/startup-limiter.class.js';
 import { CameraServer } from './helpers/camera-server.js';
 
 test('CommonJS camera frames start without a VM dynamic import callback', { timeout: 20_000 }, async () => {
-  const filename = join(process.cwd(), 'dist/cjs/camera-runtime/camera-owner.class.js');
+  const filename = join(process.cwd(), 'dist/cjs/camera-runtime/services/camera-owner.class.js');
   const require = createRequire(filename);
   const module = { exports: {} as { CameraOwner: typeof CameraOwner } };
   // pkg executes compiled CommonJS in a VM. Deliberately omit the dynamic

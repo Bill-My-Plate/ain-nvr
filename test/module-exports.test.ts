@@ -54,14 +54,14 @@ test('CommonJS output keeps a literal libav addon require for pkg', () => {
   const commonJsAddonLoader = readFileSync(
     join(
       process.cwd(),
-      'dist/cjs/frame-extractor/preload-scrypted-libav-native-addon.util.js',
+      'dist/cjs/frame-extractor/utils/preload-scrypted-libav-native-addon.util.js',
     ),
     'utf8',
   );
   const commonJsRuntime = readFileSync(
     join(
       process.cwd(),
-      'dist/cjs/frame-extractor/create-scrypted-libav-runtime.util.js',
+      'dist/cjs/frame-extractor/utils/create-scrypted-libav-runtime.util.js',
     ),
     'utf8',
   );

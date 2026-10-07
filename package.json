@@ -215,7 +215,8 @@
   },
   "scripts": {
     "build": "node ./scripts/build-dual.mjs",
-    "check": "tsc -p tsconfig.json --noEmit && node ./scripts/check-architecture.mjs",
+    "check": "tsc -p tsconfig.json --noEmit && node ./scripts/check-architecture.mjs && npm run check:conventions",
+    "check:conventions": "node ./scripts/conventions/main.mjs",
     "pretest": "npm run build",
     "test": "node ./scripts/run-tests.mjs",
     "prepare": "npm run build",

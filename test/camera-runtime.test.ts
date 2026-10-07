@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-import { getCameraRuntime } from '../src/camera-runtime/get-camera-runtime.util.js';
+import { getCameraRuntime } from '../src/camera-runtime/utils/get-camera-runtime.util.js';
 import type { CommittedSegment } from '../src/recording-storage/index.js';
 import { CameraServer, until } from './helpers/camera-server.js';
 

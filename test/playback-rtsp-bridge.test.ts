@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import net, { type Socket } from 'node:net';
 import test from 'node:test';
 
-import type { PlaybackMessage } from '../src/playback/playback-message.type.js';
-import { createH264CodecConfiguration } from '../src/h264/create-h264-codec-configuration.util.js';
-import { parseRtpPacket } from '../src/rtp-parser/parse-rtp-packet.util.js';
-import { PlaybackRtspBridge } from '../src/stream-adapters/playback-rtsp-bridge.class.js';
+import type { PlaybackMessage } from '../src/playback/types/playback-message.type.js';
+import { createH264CodecConfiguration } from '../src/h264/utils/create-h264-codec-configuration.util.js';
+import { parseRtpPacket } from '../src/rtp-parser/utils/parse-rtp-packet.util.js';
+import { PlaybackRtspBridge } from '../src/stream-adapters/services/playback-rtsp-bridge.class.js';
 import { createBaselineSps } from './helpers/media.js';
 
 class RtspTestClient {

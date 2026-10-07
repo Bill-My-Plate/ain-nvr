@@ -393,11 +393,15 @@ See [AGENTS.md](AGENTS.md) for the rules we will expand during refactoring.
 The source is organized into 15 internal modules in this repository. Each module
 has an `index.ts` for cross-module imports and a short `README.md` describing
 its responsibility and lifecycle rules. The root and 13 public package paths
-still use the same facades.
+still use the same facades. Implementation files sit in role folders such as
+`types/`, `utils/`, `services/`, `constants/`, `errors/`, and `entries/`; a
+module creates only the folders it uses.
 `npm run check` checks types, one-entity files, entrypoints, import boundaries,
-cycles, role suffixes, and new dynamic imports. Existing public interfaces stay
-as interfaces to preserve consumer declaration behavior; new internal shapes use
-`type`.
+cycles, role folders and suffixes, new dynamic imports, and interface usage.
+The standalone `npm run check:conventions` command checks interface usage:
+new interfaces must be implemented by a class. Existing public interfaces stay
+as interfaces to preserve consumer declaration behavior; their names are recorded
+in `test/public-api-baseline.json` and checked against the public entrypoints.
 Every public entrypoint must support both ESM `import` and CommonJS `require`.
 Do not introduce runtime dynamic `import()` calls in package source or shipped
 scripts; `pkg` can execute CommonJS in a VM without a dynamic-import callback.

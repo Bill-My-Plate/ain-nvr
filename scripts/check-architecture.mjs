@@ -40,10 +40,16 @@ const fileSet = new Set(files);
 const edges = new Map(files.map(file => [file, new Set()]));
 const moduleEdges = new Map([...modules].map(name => [name, new Set()]));
 const problems = [];
-const compatibleInterfaces = new Set(JSON.parse(
-  readFileSync(path.resolve('scripts/public-interface-compat.json'), 'utf8'),
-));
 const api = new API();
+function expectedRoleFolder(filename) {
+  if (/\.(type|interface|enum)\.ts$/.test(filename)) return 'types';
+  if (filename.endsWith('.util.ts')) return 'utils';
+  if (filename.endsWith('.constant.ts')) return 'constants';
+  if (filename.endsWith('-error.class.ts')) return 'errors';
+  if (filename.endsWith('.class.ts')) return 'services';
+  if (['camera-worker-entry.ts', 'decoder-process-entry.ts'].includes(filename)) return 'entries';
+  return null;
+}
 function cycleIn(graph) {
   const active = new Set();
   const done = new Set();
@@ -71,22 +77,17 @@ function cycleIn(graph) {
 try {
   const snapshot = api.updateSnapshot({ openProjects: [path.resolve('tsconfig.json')] });
   const program = snapshot.getProjects()[0].program;
-  const implementedNames = new Set();
-  for (const file of files) {
-    const source = program.getSourceFile(file);
-    for (const statement of source.statements) {
-      if (!ast.isClassDeclaration(statement)) continue;
-      for (const clause of statement.heritageClauses ?? []) {
-        if (ast.formatSyntaxKind(clause.token) !== 'ImplementsKeyword') continue;
-        for (const entry of clause.types) implementedNames.add(entry.expression.getText(source));
-      }
-    }
-  }
   for (const file of files) {
     const relative = path.relative(root, file).split(path.sep);
     const owner = relative.length > 1 ? relative[0] : null;
     const isModule = modules.has(owner);
     const isEntry = isModule && relative[1] === 'index.ts';
+    if (isModule && !isEntry) {
+      const expected = expectedRoleFolder(path.basename(file));
+      if (relative.length !== 3 || expected === null || relative[1] !== expected) {
+        problems.push(`${path.relative(root, file)} must be in its module's role folder`);
+      }
+    }
     const source = program.getSourceFile(file);
     if (!source) { problems.push(`Missing TypeScript source: ${file}`); continue; }
     const declarations = source.statements.filter(node =>
@@ -116,18 +117,13 @@ try {
       if (ast.isVariableStatement(declaration) && declaration.declarationList.declarations.length !== 1) {
         problems.push(`${path.relative(root, file)} declares multiple constants`);
       }
-      if (ast.isInterfaceDeclaration(declaration) &&
-          !compatibleInterfaces.has(path.relative(root, file).replaceAll(path.sep, '/')) &&
-          !implementedNames.has(declaration.name.text)) {
-        problems.push(`${path.relative(root, file)} uses an internal interface; use type`);
-      }
     }
     if (isEntry && source.statements.some(node => !ast.isExportDeclaration(node) || !node.exportClause)) {
       problems.push(`${path.relative(root, file)} must contain only explicit re-exports`);
     }
     const inspect = node => {
       if (ast.isCallExpression(node) && ast.formatSyntaxKind(node.expression.kind) === 'ImportKeyword' &&
-          path.relative(root, file) !== 'frame-extractor/create-scrypted-libav-runtime.util.ts') {
+          path.relative(root, file) !== 'frame-extractor/utils/create-scrypted-libav-runtime.util.ts') {
         problems.push(`${path.relative(root, file)} adds a dynamic runtime import`);
       }
       node.forEachChild(inspect);
@@ -158,6 +154,16 @@ try {
   }
   for (const name of modules) {
     if (!fileSet.has(path.join(root, name, 'index.ts'))) problems.push(`${name} has no index.ts`);
+    for (const entry of readdirSync(path.join(root, name), { withFileTypes: true })) {
+      if (entry.isFile() && !['index.ts', 'README.md'].includes(entry.name)) {
+        problems.push(`${name}/${entry.name} belongs in a role folder`);
+      }
+      if (entry.isDirectory() &&
+          (!['types', 'utils', 'services', 'constants', 'errors', 'entries'].includes(entry.name) ||
+           readdirSync(path.join(root, name, entry.name)).length === 0)) {
+        problems.push(`${name}/${entry.name} is not a populated role folder`);
+      }
+    }
   }
   const fileCycle = cycleIn(edges);
   if (fileCycle) problems.push(`File cycle: ${fileCycle.map(file => path.relative(root, file)).join(' -> ')}`);

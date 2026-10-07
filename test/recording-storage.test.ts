@@ -3,11 +3,11 @@ import { mkdtemp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
-import { RecordingSegmentWriter } from '../src/recording-storage/recording-segment-writer.class.js';
-import { RecordingFileUtil } from '../src/recording-storage/recording-file-util.class.js';
-import type { CommittedSegment } from '../src/recording-storage/committed-segment.type.js';
+import { RecordingSegmentWriter } from '../src/recording-storage/services/recording-segment-writer.class.js';
+import { RecordingFileUtil } from '../src/recording-storage/services/recording-file-util.class.js';
+import type { CommittedSegment } from '../src/recording-storage/types/committed-segment.type.js';
 import { createBaselineSps, mediaPacket, videoTrack } from './helpers/media.js';
-import { RecordingParser } from '../src/recording-parser/recording-parser.class.js';
+import { RecordingParser } from '../src/recording-parser/services/recording-parser.class.js';
 
 const sessionInfo = { sdp: 'v=0\r\n', tracks: [{ ...videoTrack, control: 'track1', parameterSets: {
   sps: createBaselineSps(), pps: Buffer.from([0x68, 0xaa]),

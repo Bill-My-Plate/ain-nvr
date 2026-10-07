@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseRtpPacket } from '../src/rtp-parser/parse-rtp-packet.util.js';
-import { RtpPacketizer } from '../src/stream-adapters/rtp-packetizer.class.js';
+import { parseRtpPacket } from '../src/rtp-parser/utils/parse-rtp-packet.util.js';
+import { RtpPacketizer } from '../src/stream-adapters/services/rtp-packetizer.class.js';
 
 test('RTP packetizer emits single NAL and FU-A H.264 packets', () => {
   const packetizer = new RtpPacketizer({

@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { RtspClient } from '../src/rtsp-client/rtsp-client.class.js';
-import { type RtspClientSession } from '../src/rtsp-client/rtsp-client-session.interface.js';
-import { parseSdp } from '../src/rtsp-parser/parse-sdp.util.js';
-import { RtspSessionManager } from '../src/stream-session/rtsp-session-manager.class.js';
-import { RtspStreamSession } from '../src/stream-session/rtsp-stream-session.class.js';
+import { RtspClient } from '../src/rtsp-client/services/rtsp-client.class.js';
+import { type RtspClientSession } from '../src/rtsp-client/types/rtsp-client-session.interface.js';
+import { parseSdp } from '../src/rtsp-parser/utils/parse-sdp.util.js';
+import { RtspSessionManager } from '../src/stream-session/services/rtsp-session-manager.class.js';
+import { RtspStreamSession } from '../src/stream-session/services/rtsp-stream-session.class.js';
 import { createBaselineSps, mediaPacket } from './helpers/media.js';
-import { AinNvrError } from '../src/shared/ain-nvr-error.class.js';
+import { AinNvrError } from '../src/shared/errors/ain-nvr-error.class.js';
 
 class SessionInfoRtspClient extends RtspClient {
   constructor(private readonly result: RtspClientSession) {

@@ -12,7 +12,7 @@ Do not introduce runtime `import()` in `src/` or shipped scripts. A `pkg` execut
 
 `import type` and `typeof import('module')` are TypeScript type syntax, not runtime dynamic imports. Test code may use `import()` to verify ESM consumers because tests are not packaged in the executable.
 
-Leave the existing working `import()` calls in `src/frame-extractor/create-scrypted-libav-runtime.util.ts` and `scripts/install-libav.mjs` alone. The runtime call is outside the `pkg` branch, and the install script runs outside the packaged executable. Do not copy those patterns into new packaged code.
+Leave the existing working `import()` calls in `src/frame-extractor/utils/create-scrypted-libav-runtime.util.ts` and `scripts/install-libav.mjs` alone. The runtime call is outside the `pkg` branch, and the install script runs outside the packaged executable. Do not copy those patterns into new packaged code.
 
 ## 3. One entity per file
 
@@ -20,7 +20,7 @@ Keep one top-level entity in each production source file: one type alias, interf
 
 ## 4. Use type aliases by default
 
-Declare shapes with `type`. Use `interface` only for a contract that a class implements. Keep each declaration in its own file.
+Declare shapes with `type`. Use `interface` only for a contract that a class implements. Keep each declaration in its own file. Existing public interfaces listed in `test/public-api-baseline.json` remain interfaces to preserve the published TypeScript API. `npm run check:conventions` enforces this rule and verifies that those interfaces remain publicly exported.
 
 ## 5. Name files by role
 
@@ -45,3 +45,7 @@ For each refactor, add or update focused tests for the behavior being moved befo
 ## 10. Document module responsibility
 
 Give each new or refactored module a short responsibility note describing what it owns, what its `index.ts` exposes, and any non-obvious lifecycle or data invariants. Update that note when the boundary changes. Keep routine implementation details in code rather than duplicating them in documentation.
+
+## 11. Group each module by file role
+
+Keep only `index.ts` and `README.md` at each `src/<module>/` root. Put type aliases, interfaces, and enums in `types/`; functions in `utils/`; constants in `constants/`; stateful classes in `services/`; error classes in `errors/`; and executable worker/process entry scripts in `entries/`. Create only folders that contain files. Do not add entrypoints inside these folders: same-module code imports the specific file, and other modules import through the root `index.ts`. Keep the worker entry filenames stable and update their resolver if their location changes. `npm run check` enforces this layout.

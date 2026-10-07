@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { RecordedRtspParser } from '../src/recorded-stream-parser/recorded-rtsp-parser.class.js';
-import { RecordedStreamError } from '../src/recorded-stream-parser/recorded-stream-error.class.js';
-import { type RecordedByteSource } from '../src/recorded-stream-parser/recorded-byte-source.interface.js';
-import { type RecordedSegmentDescriptor } from '../src/recorded-stream-parser/recorded-segment-descriptor.interface.js';
-import { RecordingParser } from '../src/recording-parser/recording-parser.class.js';
-import { type RecordingWriteRequest } from '../src/recording-parser/recording-write-request.interface.js';
-import { RecordingPipeline } from '../src/recording-parser/recording-pipeline.class.js';
-import { type RecordingPacketSource } from '../src/recording-parser/recording-packet-source.interface.js';
+import { RecordedRtspParser } from '../src/recorded-stream-parser/services/recorded-rtsp-parser.class.js';
+import { RecordedStreamError } from '../src/recorded-stream-parser/errors/recorded-stream-error.class.js';
+import { type RecordedByteSource } from '../src/recorded-stream-parser/types/recorded-byte-source.interface.js';
+import { type RecordedSegmentDescriptor } from '../src/recorded-stream-parser/types/recorded-segment-descriptor.interface.js';
+import { RecordingParser } from '../src/recording-parser/services/recording-parser.class.js';
+import { type RecordingWriteRequest } from '../src/recording-parser/types/recording-write-request.interface.js';
+import { RecordingPipeline } from '../src/recording-parser/services/recording-pipeline.class.js';
+import { type RecordingPacketSource } from '../src/recording-parser/types/recording-packet-source.interface.js';
 import type { MediaPacket } from '../src/media/index.js';
 import {
   createBaselineSps,

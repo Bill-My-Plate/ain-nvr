@@ -1,2 +1,2 @@
-export type { TrackDescription } from './track-description.interface.js';
-export type { MediaPacket } from './media-packet.interface.js';
+export type { TrackDescription } from './types/track-description.interface.js';
+export type { MediaPacket } from './types/media-packet.interface.js';

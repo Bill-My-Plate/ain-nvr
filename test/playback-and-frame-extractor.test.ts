@@ -1,20 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { decoderCandidates } from '../src/frame-extractor/decoder-candidates.util.js';
-import { selectDecoder } from '../src/frame-extractor/select-decoder.util.js';
-import { type DecoderHostCapabilities } from '../src/frame-extractor/decoder-host-capabilities.interface.js';
-import { FrameSampler } from '../src/frame-extractor/frame-sampler.class.js';
-import type { LibavDecoderLike } from '../src/frame-extractor/libav-decoder-like.type.js';
-import type { LibavFormatContextLike } from '../src/frame-extractor/libav-format-context-like.type.js';
-import type { LibavFrameLike } from '../src/frame-extractor/libav-frame-like.type.js';
-import type { LibavPacketLike } from '../src/frame-extractor/libav-packet-like.type.js';
-import type { LibavStreamLike } from '../src/frame-extractor/libav-stream-like.type.js';
-import type { Logger } from '../src/shared/logger.interface.js';
-import { createPlaybackStream } from '../src/playback/create-playback-stream.util.js';
-import { type PlaybackSource } from '../src/playback/playback-source.interface.js';
-import type { RecordedByteSource } from '../src/recorded-stream-parser/recorded-byte-source.interface.js';
-import type { RecordedSegmentDescriptor } from '../src/recorded-stream-parser/recorded-segment-descriptor.interface.js';
+import { decoderCandidates } from '../src/frame-extractor/utils/decoder-candidates.util.js';
+import { selectDecoder } from '../src/frame-extractor/utils/select-decoder.util.js';
+import { type DecoderHostCapabilities } from '../src/frame-extractor/types/decoder-host-capabilities.interface.js';
+import { FrameSampler } from '../src/frame-extractor/services/frame-sampler.class.js';
+import type { LibavDecoderLike } from '../src/frame-extractor/types/libav-decoder-like.type.js';
+import type { LibavFormatContextLike } from '../src/frame-extractor/types/libav-format-context-like.type.js';
+import type { LibavFrameLike } from '../src/frame-extractor/types/libav-frame-like.type.js';
+import type { LibavPacketLike } from '../src/frame-extractor/types/libav-packet-like.type.js';
+import type { LibavStreamLike } from '../src/frame-extractor/types/libav-stream-like.type.js';
+import type { Logger } from '../src/shared/types/logger.interface.js';
+import { createPlaybackStream } from '../src/playback/utils/create-playback-stream.util.js';
+import { type PlaybackSource } from '../src/playback/types/playback-source.interface.js';
+import type { RecordedByteSource } from '../src/recorded-stream-parser/types/recorded-byte-source.interface.js';
+import type { RecordedSegmentDescriptor } from '../src/recorded-stream-parser/types/recorded-segment-descriptor.interface.js';
 import { createBaselineSps, createRtp, interleaved, videoTrack } from './helpers/media.js';
 
 const logger: Logger = {

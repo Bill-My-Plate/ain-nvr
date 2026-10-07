@@ -4,6 +4,8 @@
 
 **Internal entrypoint:** [`index.ts`](index.ts) exposes RecordingParser, RecordingPipeline, events, writer contracts, and serialization helper.
 
+**Folders:** [types/](types/) (types, interfaces, and enums), [utils/](utils/) (single-purpose functions), [services/](services/) (stateful classes).
+
 **Invariant:** Flush/index callbacks complete before the host publishes a segment.
 
 Cross-module imports use this module’s `index.ts`. The package’s published paths remain the facades in `src/exports/` and `src/index.ts`.
