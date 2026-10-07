@@ -1,0 +1,4 @@
+
+
+
+export const DEFAULT_MAXIMUM_PAYLOAD_BYTES = 1_200;

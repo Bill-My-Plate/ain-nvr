@@ -10,4 +10,4 @@ export {
   type RtspStreamSessionOptions,
   type SessionState,
   type TrackDescription,
-} from '../stream/rtsp-stream-session.js';
+} from '../stream-session/index.js';

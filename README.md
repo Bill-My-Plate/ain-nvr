@@ -390,6 +390,14 @@ when recording or live view already owns an `RtspStreamSession`.
 ## Repository rules
 
 See [AGENTS.md](AGENTS.md) for the rules we will expand during refactoring.
+The source is organized into 15 internal modules in this repository. Each module
+has an `index.ts` for cross-module imports and a short `README.md` describing
+its responsibility and lifecycle rules. The root and 13 public package paths
+still use the same facades.
+`npm run check` checks types, one-entity files, entrypoints, import boundaries,
+cycles, role suffixes, and new dynamic imports. Existing public interfaces stay
+as interfaces to preserve consumer declaration behavior; new internal shapes use
+`type`.
 Every public entrypoint must support both ESM `import` and CommonJS `require`.
 Do not introduce runtime dynamic `import()` calls in package source or shipped
 scripts; `pkg` can execute CommonJS in a VM without a dynamic-import callback.

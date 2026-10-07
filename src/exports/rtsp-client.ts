@@ -4,7 +4,7 @@ export {
   type DigestAuthorizationState,
   type RtspAuthChallenge,
   type RtspCredentials,
-} from '../rtsp/auth.js';
+} from '../rtsp-client/index.js';
 export {
   RtspClient,
   RtspClientError,
@@ -12,4 +12,4 @@ export {
   type RtspClientOptions,
   type RtspClientSession,
   type RtspVideoTrack,
-} from '../rtsp/client.js';
+} from '../rtsp-client/index.js';

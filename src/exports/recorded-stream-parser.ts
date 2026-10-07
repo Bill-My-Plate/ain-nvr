@@ -7,4 +7,4 @@ export {
   type RecordedRtspParserOptions,
   type RecordedSegmentDescriptor,
   type SequenceGap,
-} from '../recorded-stream-parser/recorded-rtsp-parser.js';
+} from '../recorded-stream-parser/index.js';

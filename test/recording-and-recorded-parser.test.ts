@@ -1,21 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  RecordedRtspParser,
-  RecordedStreamError,
-  type RecordedByteSource,
-  type RecordedSegmentDescriptor,
-} from '../src/recorded-stream-parser/recorded-rtsp-parser.js';
-import {
-  RecordingParser,
-  type RecordingWriteRequest,
-} from '../src/recording-parser/recording-parser.js';
-import {
-  RecordingPipeline,
-  type RecordingPacketSource,
-} from '../src/recording-parser/recording-pipeline.js';
-import type { MediaPacket } from '../src/stream/rtsp-stream-session.js';
+import { RecordedRtspParser } from '../src/recorded-stream-parser/recorded-rtsp-parser.class.js';
+import { RecordedStreamError } from '../src/recorded-stream-parser/recorded-stream-error.class.js';
+import { type RecordedByteSource } from '../src/recorded-stream-parser/recorded-byte-source.interface.js';
+import { type RecordedSegmentDescriptor } from '../src/recorded-stream-parser/recorded-segment-descriptor.interface.js';
+import { RecordingParser } from '../src/recording-parser/recording-parser.class.js';
+import { type RecordingWriteRequest } from '../src/recording-parser/recording-write-request.interface.js';
+import { RecordingPipeline } from '../src/recording-parser/recording-pipeline.class.js';
+import { type RecordingPacketSource } from '../src/recording-parser/recording-packet-source.interface.js';
+import type { MediaPacket } from '../src/media/index.js';
 import {
   createBaselineSps,
   createRtp,

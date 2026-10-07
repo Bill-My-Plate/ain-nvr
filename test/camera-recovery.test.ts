@@ -4,10 +4,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { Worker } from 'node:worker_threads';
 import test from 'node:test';
-import { CameraOwner } from '../src/camera-runtime/camera-owner.js';
-import { resolveSettings, StartupLimiter } from '../src/camera-runtime/settings.js';
-import type { CommittedSegment } from '../src/camera-runtime/types.js';
-import { getCameraRuntime } from '../src/camera-runtime/camera-runtime.js';
+import { CameraOwner } from '../src/camera-runtime/camera-owner.class.js';
+import { resolveSettings } from '../src/camera-runtime/resolve-settings.util.js';
+import { StartupLimiter } from '../src/camera-runtime/startup-limiter.class.js';
+import type { CommittedSegment } from '../src/recording-storage/index.js';
+import { getCameraRuntime } from '../src/camera-runtime/get-camera-runtime.util.js';
 import { CameraServer, until } from './helpers/camera-server.js';
 
 const settings = { acquireTimeoutMs: 3_000, shutdownTimeoutMs: 2_000, operationTimeoutMs: 8_000,

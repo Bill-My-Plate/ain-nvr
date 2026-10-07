@@ -1,8 +1,8 @@
-import { RtspLoopbackBridge } from '../../src/stream/rtsp-loopback-bridge.js';
-import type { MediaPacket } from '../../src/stream/rtsp-stream-session.js';
-import { splitH264NalUnits } from '../../src/rtp/h264-configuration.js';
-import { RtpPacketizer } from '../../src/rtp/packetizer.js';
-import { parseRtpPacket } from '../../src/rtp/packet.js';
+import { RtspLoopbackBridge } from '../../src/stream-adapters/rtsp-loopback-bridge.class.js';
+import type { MediaPacket } from '../../src/media/index.js';
+import { splitH264NalUnits } from '../../src/h264/split-h264-nal-units.util.js';
+import { RtpPacketizer } from '../../src/stream-adapters/rtp-packetizer.class.js';
+import { parseRtpPacket } from '../../src/rtp-parser/parse-rtp-packet.util.js';
 import { cameraH264 } from './camera-h264.js';
 import { interleaved, videoTrack } from './media.js';
 import type { Server, Socket } from 'node:net';

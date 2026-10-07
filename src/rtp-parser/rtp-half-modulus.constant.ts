@@ -1,0 +1,1 @@
+export const RTP_HALF_MODULUS = 0x8000_0000;

@@ -1,22 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  decoderCandidates,
-  selectDecoder,
-  type DecoderHostCapabilities,
-} from '../src/frame-extractor/decoder.js';
-import { FrameSampler } from '../src/frame-extractor/frame-sampler.js';
-import type {
-  LibavDecoderLike,
-  LibavFormatContextLike,
-  LibavFrameLike,
-  LibavPacketLike,
-  LibavStreamLike,
-} from '../src/frame-extractor/libav-types.js';
-import type { Logger } from '../src/logging/logger.js';
-import { createPlaybackStream, type PlaybackSource } from '../src/playback/playback-stream.js';
-import type { RecordedByteSource, RecordedSegmentDescriptor } from '../src/recorded-stream-parser/recorded-rtsp-parser.js';
+import { decoderCandidates } from '../src/frame-extractor/decoder-candidates.util.js';
+import { selectDecoder } from '../src/frame-extractor/select-decoder.util.js';
+import { type DecoderHostCapabilities } from '../src/frame-extractor/decoder-host-capabilities.interface.js';
+import { FrameSampler } from '../src/frame-extractor/frame-sampler.class.js';
+import type { LibavDecoderLike } from '../src/frame-extractor/libav-decoder-like.type.js';
+import type { LibavFormatContextLike } from '../src/frame-extractor/libav-format-context-like.type.js';
+import type { LibavFrameLike } from '../src/frame-extractor/libav-frame-like.type.js';
+import type { LibavPacketLike } from '../src/frame-extractor/libav-packet-like.type.js';
+import type { LibavStreamLike } from '../src/frame-extractor/libav-stream-like.type.js';
+import type { Logger } from '../src/shared/logger.interface.js';
+import { createPlaybackStream } from '../src/playback/create-playback-stream.util.js';
+import { type PlaybackSource } from '../src/playback/playback-source.interface.js';
+import type { RecordedByteSource } from '../src/recorded-stream-parser/recorded-byte-source.interface.js';
+import type { RecordedSegmentDescriptor } from '../src/recorded-stream-parser/recorded-segment-descriptor.interface.js';
 import { createBaselineSps, createRtp, interleaved, videoTrack } from './helpers/media.js';
 
 const logger: Logger = {

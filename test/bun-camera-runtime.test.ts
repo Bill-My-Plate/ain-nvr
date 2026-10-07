@@ -12,7 +12,7 @@ test('Bun records and decodes native JPEGs in a shared camera worker', { skip: !
   const server = new CameraServer();
   const directory = await mkdtemp(join(tmpdir(), 'ain-bun-'));
   try {
-    const entry = new URL('../src/camera-runtime/camera-runtime.js', import.meta.url).href;
+    const entry = new URL('../src/camera-runtime/index.js', import.meta.url).href;
     const script = join(directory, 'consumer.mjs');
     await writeFile(script, `
 import { getCameraRuntime } from ${JSON.stringify(entry)};

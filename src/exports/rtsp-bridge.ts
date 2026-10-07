@@ -3,9 +3,9 @@ export {
   type RtspBridgePacketSource,
   type RtspLoopbackBridgeOptions,
   type RtspLoopbackBridgeStatus,
-} from '../stream/rtsp-loopback-bridge.js';
+} from '../stream-adapters/index.js';
 export {
   PlaybackRtspBridge,
   type PlaybackRtspBridgeOptions,
   type PlaybackRtspBridgeStart,
-} from '../stream/playback-rtsp-bridge.js';
+} from '../stream-adapters/index.js';

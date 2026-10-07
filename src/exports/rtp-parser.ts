@@ -1,17 +1,17 @@
-export { parseRtpPacket, type RtpPacket } from '../rtp/packet.js';
+export { parseRtpPacket, type RtpPacket } from '../rtp-parser/index.js';
 export {
   RtpReorderBuffer,
   type ReorderedPacket,
   type ReorderResult,
-} from '../rtp/reorder-buffer.js';
+} from '../rtp-parser/index.js';
 export {
   findRtcpSenderReport,
   parseRtcpSenderReport,
   RtcpPacketError,
   type RtcpSenderReport,
-} from '../rtp/rtcp.js';
+} from '../rtp-parser/index.js';
 export {
   RtpClockMapper,
   RtpTimestampUnwrapper,
   rtpTicksToMicroseconds,
-} from '../rtp/timestamp.js';
+} from '../rtp-parser/index.js';

@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-import { getCameraRuntime } from '../src/camera-runtime/camera-runtime.js';
-import type { CommittedSegment } from '../src/camera-runtime/types.js';
+import { getCameraRuntime } from '../src/camera-runtime/get-camera-runtime.util.js';
+import type { CommittedSegment } from '../src/recording-storage/index.js';
 import { CameraServer, until } from './helpers/camera-server.js';
 
 const settings = { acquireTimeoutMs: 5_000, operationTimeoutMs: 10_000, shutdownTimeoutMs: 2_000, firstFrameTimeoutMs: 10_000 };

@@ -1,1 +1,1 @@
-export * from '../playback/wire-protocol.js';
+export * from '../playback-wire/index.js';

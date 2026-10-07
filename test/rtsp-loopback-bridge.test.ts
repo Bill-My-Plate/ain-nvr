@@ -1,22 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  SharedRtspFrameExtractor,
-} from '../src/frame-extractor/shared-rtsp-frame-extractor.js';
-import type {
-  LibavDecoderLike,
-  LibavFormatContextLike,
-  LibavFrameLike,
-  LibavPacketLike,
-  LibavRuntime,
-} from '../src/frame-extractor/libav-types.js';
-import type { MediaPacket } from '../src/stream/rtsp-stream-session.js';
-import {
-  RtspLoopbackBridge,
-  type RtspBridgePacketSource,
-} from '../src/stream/rtsp-loopback-bridge.js';
-import { RtspClient } from '../src/rtsp/client.js';
+import { SharedRtspFrameExtractor } from '../src/frame-extractor/shared-rtsp-frame-extractor.class.js';
+import type { LibavDecoderLike } from '../src/frame-extractor/libav-decoder-like.type.js';
+import type { LibavFormatContextLike } from '../src/frame-extractor/libav-format-context-like.type.js';
+import type { LibavFrameLike } from '../src/frame-extractor/libav-frame-like.type.js';
+import type { LibavPacketLike } from '../src/frame-extractor/libav-packet-like.type.js';
+import type { LibavRuntime } from '../src/frame-extractor/libav-runtime.type.js';
+import type { MediaPacket } from '../src/media/index.js';
+import { RtspLoopbackBridge } from '../src/stream-adapters/rtsp-loopback-bridge.class.js';
+import { type RtspBridgePacketSource } from '../src/stream-adapters/rtsp-bridge-packet-source.interface.js';
+import { RtspClient } from '../src/rtsp-client/rtsp-client.class.js';
 import { createBaselineSps, mediaPacket, videoTrack } from './helpers/media.js';
 
 class FakePacketSource implements RtspBridgePacketSource {

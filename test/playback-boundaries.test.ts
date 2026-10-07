@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  createPlaybackStream,
-  type PlaybackMessage,
-  type PlaybackSegment,
-  type PlaybackSource,
-} from '../src/playback/playback-stream.js';
+import { createPlaybackStream } from '../src/playback/create-playback-stream.util.js';
+import { type PlaybackMessage } from '../src/playback/playback-message.type.js';
+import { type PlaybackSegment } from '../src/playback/playback-segment.type.js';
+import { type PlaybackSource } from '../src/playback/playback-source.interface.js';
 import { createBaselineSps, createRtp, interleaved, videoTrack } from './helpers/media.js';
 
 const audioTrack = {

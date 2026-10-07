@@ -1,18 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  createRtspAuthorization,
-  parseRtspAuthChallenge,
-} from '../src/rtsp/auth.js';
-import {
-  createH264CodecConfiguration,
-  H264ConfigurationTracker,
-  splitH264NalUnits,
-} from '../src/rtp/h264-configuration.js';
-import { inspectH264Payload, H264PayloadError } from '../src/rtp/h264.js';
-import { RtpReorderBuffer } from '../src/rtp/reorder-buffer.js';
-import { RtpTimestampUnwrapper } from '../src/rtp/timestamp.js';
+import { createRtspAuthorization } from '../src/rtsp-client/create-rtsp-authorization.util.js';
+import { parseRtspAuthChallenge } from '../src/rtsp-client/parse-rtsp-auth-challenge.util.js';
+import { createH264CodecConfiguration } from '../src/h264/create-h264-codec-configuration.util.js';
+import { H264ConfigurationTracker } from '../src/h264/h264-configuration-tracker.class.js';
+import { splitH264NalUnits } from '../src/h264/split-h264-nal-units.util.js';
+import { inspectH264Payload } from '../src/h264/inspect-h264-payload.util.js';
+import { H264PayloadError } from '../src/h264/h264-payload-error.class.js';
+import { RtpReorderBuffer } from '../src/rtp-parser/rtp-reorder-buffer.class.js';
+import { RtpTimestampUnwrapper } from '../src/rtp-parser/rtp-timestamp-unwrapper.class.js';
 import { createBaselineSps } from './helpers/media.js';
 
 test('RTSP Digest authorization quotes the algorithm for Hikvision compatibility', () => {

@@ -1,0 +1,292 @@
+{
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./rtsp-parser": {
+      "import": {
+        "types": "./dist/esm/exports/rtsp-parser.d.ts",
+        "default": "./dist/esm/exports/rtsp-parser.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtsp-parser.d.ts",
+        "default": "./dist/cjs/exports/rtsp-parser.js"
+      }
+    },
+    "./rtsp-client": {
+      "import": {
+        "types": "./dist/esm/exports/rtsp-client.d.ts",
+        "default": "./dist/esm/exports/rtsp-client.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtsp-client.d.ts",
+        "default": "./dist/cjs/exports/rtsp-client.js"
+      }
+    },
+    "./rtp-parser": {
+      "import": {
+        "types": "./dist/esm/exports/rtp-parser.d.ts",
+        "default": "./dist/esm/exports/rtp-parser.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtp-parser.d.ts",
+        "default": "./dist/cjs/exports/rtp-parser.js"
+      }
+    },
+    "./h264": {
+      "import": {
+        "types": "./dist/esm/exports/h264.d.ts",
+        "default": "./dist/esm/exports/h264.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/h264.d.ts",
+        "default": "./dist/cjs/exports/h264.js"
+      }
+    },
+    "./stream-session": {
+      "import": {
+        "types": "./dist/esm/exports/stream-session.d.ts",
+        "default": "./dist/esm/exports/stream-session.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/stream-session.d.ts",
+        "default": "./dist/cjs/exports/stream-session.js"
+      }
+    },
+    "./recording-parser": {
+      "import": {
+        "types": "./dist/esm/exports/recording-parser.d.ts",
+        "default": "./dist/esm/exports/recording-parser.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/recording-parser.d.ts",
+        "default": "./dist/cjs/exports/recording-parser.js"
+      }
+    },
+    "./recorded-stream-parser": {
+      "import": {
+        "types": "./dist/esm/exports/recorded-stream-parser.d.ts",
+        "default": "./dist/esm/exports/recorded-stream-parser.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/recorded-stream-parser.d.ts",
+        "default": "./dist/cjs/exports/recorded-stream-parser.js"
+      }
+    },
+    "./playback": {
+      "import": {
+        "types": "./dist/esm/exports/playback.d.ts",
+        "default": "./dist/esm/exports/playback.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/playback.d.ts",
+        "default": "./dist/cjs/exports/playback.js"
+      }
+    },
+    "./playback-wire": {
+      "import": {
+        "types": "./dist/esm/exports/playback-wire.d.ts",
+        "default": "./dist/esm/exports/playback-wire.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/playback-wire.d.ts",
+        "default": "./dist/cjs/exports/playback-wire.js"
+      }
+    },
+    "./frame-extractor": {
+      "import": {
+        "types": "./dist/esm/exports/frame-extractor.d.ts",
+        "default": "./dist/esm/exports/frame-extractor.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/frame-extractor.d.ts",
+        "default": "./dist/cjs/exports/frame-extractor.js"
+      }
+    },
+    "./rtp-forwarder": {
+      "import": {
+        "types": "./dist/esm/exports/rtp-forwarder.d.ts",
+        "default": "./dist/esm/exports/rtp-forwarder.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtp-forwarder.d.ts",
+        "default": "./dist/cjs/exports/rtp-forwarder.js"
+      }
+    },
+    "./rtsp-bridge": {
+      "import": {
+        "types": "./dist/esm/exports/rtsp-bridge.d.ts",
+        "default": "./dist/esm/exports/rtsp-bridge.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/rtsp-bridge.d.ts",
+        "default": "./dist/cjs/exports/rtsp-bridge.js"
+      }
+    },
+    "./camera-runtime": {
+      "import": {
+        "types": "./dist/esm/exports/camera-runtime.d.ts",
+        "default": "./dist/esm/exports/camera-runtime.js"
+      },
+      "require": {
+        "types": "./dist/cjs/exports/camera-runtime.d.ts",
+        "default": "./dist/cjs/exports/camera-runtime.js"
+      }
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "rtsp-parser": [
+        "dist/cjs/exports/rtsp-parser.d.ts"
+      ],
+      "rtsp-client": [
+        "dist/cjs/exports/rtsp-client.d.ts"
+      ],
+      "rtp-parser": [
+        "dist/cjs/exports/rtp-parser.d.ts"
+      ],
+      "h264": [
+        "dist/cjs/exports/h264.d.ts"
+      ],
+      "stream-session": [
+        "dist/cjs/exports/stream-session.d.ts"
+      ],
+      "recording-parser": [
+        "dist/cjs/exports/recording-parser.d.ts"
+      ],
+      "recorded-stream-parser": [
+        "dist/cjs/exports/recorded-stream-parser.d.ts"
+      ],
+      "playback": [
+        "dist/cjs/exports/playback.d.ts"
+      ],
+      "playback-wire": [
+        "dist/cjs/exports/playback-wire.d.ts"
+      ],
+      "frame-extractor": [
+        "dist/cjs/exports/frame-extractor.d.ts"
+      ],
+      "rtp-forwarder": [
+        "dist/cjs/exports/rtp-forwarder.d.ts"
+      ],
+      "rtsp-bridge": [
+        "dist/cjs/exports/rtsp-bridge.d.ts"
+      ],
+      "camera-runtime": [
+        "dist/cjs/exports/camera-runtime.d.ts"
+      ]
+    }
+  },
+  "runtime": {
+    "ain-nvr": [
+      "AIN_NVR_VERSION",
+      "AinNvrError",
+      "RobustnessMetrics",
+      "createLogger",
+      "getCameraRuntime",
+      "redactSensitiveText",
+      "sanitizeLogContext"
+    ],
+    "ain-nvr/rtsp-parser": [
+      "ByteQueue",
+      "DEFAULT_RTSP_PARSER_LIMITS",
+      "RtspInterleavedParser",
+      "RtspMessageParser",
+      "RtspMixedParser",
+      "RtspParseError",
+      "getRtspHeader",
+      "parseSdp",
+      "resolveRtspControlUrl",
+      "resolveRtspParserLimits",
+      "selectG711AudioMedia",
+      "selectH264VideoMedia",
+      "tryReadRtspMessage"
+    ],
+    "ain-nvr/rtsp-client": [
+      "RtspClient",
+      "RtspClientError",
+      "createRtspAuthorization",
+      "parseRtspAuthChallenge"
+    ],
+    "ain-nvr/rtp-parser": [
+      "RtcpPacketError",
+      "RtpClockMapper",
+      "RtpReorderBuffer",
+      "RtpTimestampUnwrapper",
+      "findRtcpSenderReport",
+      "parseRtcpSenderReport",
+      "parseRtpPacket",
+      "rtpTicksToMicroseconds"
+    ],
+    "ain-nvr/h264": [
+      "H264AccessUnitAssembler",
+      "H264ConfigurationTracker",
+      "H264NalType",
+      "H264PayloadError",
+      "createH264CodecConfiguration",
+      "inspectH264Payload",
+      "normalizeH264ParameterSet",
+      "parseH264Sps",
+      "splitH264NalUnits"
+    ],
+    "ain-nvr/stream-session": [
+      "RtspSessionManager",
+      "RtspStreamSession"
+    ],
+    "ain-nvr/recording-parser": [
+      "RecordingParser",
+      "RecordingPipeline",
+      "serializeInterleavedFrame"
+    ],
+    "ain-nvr/recorded-stream-parser": [
+      "RecordedRtspParser",
+      "RecordedStreamError"
+    ],
+    "ain-nvr/playback": [
+      "PlaybackMediaError",
+      "PlaybackPacer",
+      "createG711AccessUnit",
+      "createPlaybackStream",
+      "runIndependentPlaybackTracks"
+    ],
+    "ain-nvr/playback-wire": [
+      "ACCESS_UNIT_HEADER_BYTES",
+      "ACCESS_UNIT_MAGIC",
+      "DEFAULT_MAX_ACCESS_UNIT_BYTES",
+      "PLAYBACK_PROTOCOL_VERSION",
+      "PlaybackProtocolError",
+      "decodeAccessUnitMessage",
+      "encodeAccessUnitMessage",
+      "parseClientPlaybackMessage"
+    ],
+    "ain-nvr/frame-extractor": [
+      "FrameSampler",
+      "RtspUrlFrameExtractor",
+      "SharedRtspFrameExtractor",
+      "createScryptedLibavRuntime",
+      "decoderCandidates",
+      "detectDecoderHostCapabilities",
+      "isSaneFrame",
+      "isScryptedLibavAvailable",
+      "preloadScryptedLibavNativeAddon",
+      "selectDecoder"
+    ],
+    "ain-nvr/rtp-forwarder": [
+      "RtpUdpForwarder"
+    ],
+    "ain-nvr/rtsp-bridge": [
+      "PlaybackRtspBridge",
+      "RtspLoopbackBridge"
+    ],
+    "ain-nvr/camera-runtime": [
+      "getCameraRuntime"
+    ]
+  }
+}

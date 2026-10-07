@@ -5,18 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import {
-  createPlaybackStream,
-  type PlaybackMessage,
-  type PlaybackSource,
-} from '../src/playback/playback-stream.js';
-import {
-  createH264CodecConfiguration,
-  splitH264NalUnits,
-  type H264CodecConfiguration,
-} from '../src/rtp/h264-configuration.js';
-import { RtpPacketizer } from '../src/rtp/packetizer.js';
-import { PlaybackRtspBridge } from '../src/stream/playback-rtsp-bridge.js';
+import { createPlaybackStream } from '../src/playback/create-playback-stream.util.js';
+import { type PlaybackMessage } from '../src/playback/playback-message.type.js';
+import { type PlaybackSource } from '../src/playback/playback-source.interface.js';
+import { createH264CodecConfiguration } from '../src/h264/create-h264-codec-configuration.util.js';
+import { splitH264NalUnits } from '../src/h264/split-h264-nal-units.util.js';
+import { type H264CodecConfiguration } from '../src/h264/h264-codec-configuration.interface.js';
+import { RtpPacketizer } from '../src/stream-adapters/rtp-packetizer.class.js';
+import { PlaybackRtspBridge } from '../src/stream-adapters/playback-rtsp-bridge.class.js';
 import { interleaved, videoTrack } from './helpers/media.js';
 
 const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';

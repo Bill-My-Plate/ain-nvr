@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 
-import type { TrackDescription } from '../../src/media/track-description.js';
-import { parseRtpPacket } from '../../src/rtp/packet.js';
-import type { MediaPacket } from '../../src/stream/rtsp-stream-session.js';
+import type { TrackDescription } from '../../src/media/track-description.interface.js';
+import { parseRtpPacket } from '../../src/rtp-parser/parse-rtp-packet.util.js';
+import type { MediaPacket } from '../../src/media/index.js';
 
 class BitWriter {
   private readonly bits: number[] = [];

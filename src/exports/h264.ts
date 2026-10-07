@@ -4,7 +4,7 @@ export {
   H264PayloadError,
   type H264Packetization,
   type H264PayloadInspection,
-} from '../rtp/h264.js';
+} from '../h264/index.js';
 export {
   createH264CodecConfiguration,
   H264ConfigurationTracker,
@@ -12,10 +12,10 @@ export {
   splitH264NalUnits,
   type H264CodecConfiguration,
   type H264DecoderConfiguration,
-} from '../rtp/h264-configuration.js';
-export { parseH264Sps, type H264SpsInfo } from '../rtp/sps.js';
+} from '../h264/index.js';
+export { parseH264Sps, type H264SpsInfo } from '../h264/index.js';
 export {
   H264AccessUnitAssembler,
   type H264AccessUnit,
   type H264AccessUnitAssemblerOptions,
-} from '../playback/access-unit-assembler.js';
+} from '../h264/index.js';

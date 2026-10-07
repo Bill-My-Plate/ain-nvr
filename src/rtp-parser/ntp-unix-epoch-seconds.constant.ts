@@ -1,0 +1,1 @@
+export const NTP_UNIX_EPOCH_SECONDS = 2_208_988_800;

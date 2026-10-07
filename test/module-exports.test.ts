@@ -22,13 +22,26 @@ const packageEntrypoints = [
 ] as const;
 
 const require = createRequire(import.meta.url);
+const baseline = JSON.parse(
+  readFileSync(join(process.cwd(), 'test/public-api-baseline.json'), 'utf8'),
+) as {
+  exports: Record<string, unknown>;
+  typesVersions: Record<string, unknown>;
+  runtime: Record<string, string[]>;
+};
 
 test('every public entrypoint supports import and require', async () => {
+  const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
+    exports: Record<string, unknown>;
+    typesVersions: Record<string, unknown>;
+  };
+  assert.deepEqual(packageJson.exports, baseline.exports);
+  assert.deepEqual(packageJson.typesVersions, baseline.typesVersions);
   for (const entrypoint of packageEntrypoints) {
     const esmModule = await import(entrypoint);
     const commonJsModule = require(entrypoint) as Record<string, unknown>;
 
-    assert.ok(Object.keys(esmModule).length > 0, `${entrypoint} has no ESM exports`);
+    assert.deepEqual(Object.keys(esmModule).sort(), baseline.runtime[entrypoint]);
     assert.deepEqual(
       Object.keys(commonJsModule).sort(),
       Object.keys(esmModule).sort(),
@@ -38,20 +51,25 @@ test('every public entrypoint supports import and require', async () => {
 });
 
 test('CommonJS output keeps a literal libav addon require for pkg', () => {
+  const commonJsAddonLoader = readFileSync(
+    join(
+      process.cwd(),
+      'dist/cjs/frame-extractor/preload-scrypted-libav-native-addon.util.js',
+    ),
+    'utf8',
+  );
   const commonJsRuntime = readFileSync(
     join(
       process.cwd(),
-      'dist/cjs/frame-extractor/scrypted-libav-runtime.js',
+      'dist/cjs/frame-extractor/create-scrypted-libav-runtime.util.js',
     ),
     'utf8',
   );
 
   assert.match(
-    commonJsRuntime,
+    commonJsAddonLoader,
     /require\(["']@scrypted\/libav\/build\/Release\/addon\.node["']\)/,
   );
-  assert.match(
-    commonJsRuntime,
-    /if \(Boolean\(process\.pkg\)\) \{\s+libav = preloadScryptedLibavNativeAddon\(\);\s+\} else \{/,
-  );
+  assert.match(commonJsRuntime, /if \(Boolean\(process\.pkg\)\) \{/);
+  assert.match(commonJsRuntime, /preloadScryptedLibavNativeAddon/);
 });

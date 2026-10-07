@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { H264AccessUnitAssembler } from '../src/playback/access-unit-assembler.js';
-import { parseRtpPacket } from '../src/rtp/packet.js';
+import { H264AccessUnitAssembler } from '../src/h264/h264-access-unit-assembler.class.js';
+import { parseRtpPacket } from '../src/rtp-parser/parse-rtp-packet.util.js';
 import { createBaselineSps, createRtp } from './helpers/media.js';
 
 function input(
