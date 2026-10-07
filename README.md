@@ -5,10 +5,11 @@ and playback.
 It parses RTSP, RTP, RTCP, H.264, and G.711 without starting an `ffmpeg`
 process.
 
-The package deliberately does **not** decide how recordings are arranged on
-disk. The application supplies byte readers, packet writers, and opaque
-segment references. This keeps private cache paths, final paths, metadata JSON,
-catalogs, retention, and access control inside the application.
+The lower-level recording and playback APIs leave disk layout to the
+application. The application supplies byte readers, packet writers, and opaque
+segment references. The managed camera runtime also has its own schema-1 cache
+writer; the application still owns promotion, catalogs, retention, and access
+control.
 
 ## Supported scope
 
@@ -137,6 +138,7 @@ Do not use a `linuxstatic` target because native addons require dynamic loading.
 | `ain-nvr/frame-extractor` | URL or shared-session libav-to-JPEG extraction |
 | `ain-nvr/rtp-forwarder` | Bounded UDP forwarding building block |
 | `ain-nvr/rtsp-bridge` | Tokenized loopback RTSP bridges for live sessions and recorded playback |
+| `ain-nvr/camera-runtime` | Managed camera leases, recording, and native JPEG frames |
 
 Only these entrypoints are public. Importing paths under `dist` is not
 supported.
@@ -385,13 +387,13 @@ await extractor.stop();
 The URL-based form creates its own camera connection. Prefer the shared form
 when recording or live view already owns an `RtspStreamSession`.
 
-## Documentation
+## Repository rules
 
-- [Architecture and ownership](docs/architecture.md)
-- [RTSP, RTP, and H.264 parsing](docs/protocol-parsing.md)
-- [Recording and playback contracts](docs/recording-playback.md)
-- [BMP backend integration plan](docs/bmp-integration.md)
-- [Frame extraction](docs/frame-extraction.md)
+See [AGENTS.md](AGENTS.md) for the rules we will expand during refactoring.
+Every public entrypoint must support both ESM `import` and CommonJS `require`.
+Do not introduce runtime dynamic `import()` calls in package source or shipped
+scripts; `pkg` can execute CommonJS in a VM without a dynamic-import callback.
+Existing working calls remain as described in [AGENTS.md](AGENTS.md).
 
 ## Development
 
