@@ -188,7 +188,6 @@
     "ain-nvr": [
       "AIN_NVR_VERSION",
       "AinNvrError",
-      "RobustnessMetrics",
       "createLogger",
       "getCameraRuntime",
       "redactSensitiveText",

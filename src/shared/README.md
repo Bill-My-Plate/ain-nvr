@@ -1,10 +1,10 @@
 # shared
 
-**Owns:** Domain-independent errors, logging, redaction, and robustness counters.
+**Owns:** Domain-independent errors, logging, and redaction.
 
-**Internal entrypoint:** [`index.ts`](index.ts) exposes AinNvrError, logger helpers/contracts, and robustness metrics.
+**Internal entrypoint:** [`index.ts`](index.ts) exposes AinNvrError and logger helpers/contracts.
 
-**Folders:** [types/](types/) (types, interfaces, and enums), [utils/](utils/) (single-purpose functions), [services/](services/) (stateful classes), [constants/](constants/) (named constants), [errors/](errors/) (error classes).
+**Folders:** [types/](types/) (types and interfaces), [utils/](utils/) (single-purpose functions), [constants/](constants/) (named constants), [errors/](errors/) (error classes).
 
 **Invariant:** Keep camera, media, and storage policy in their owning modules.
 

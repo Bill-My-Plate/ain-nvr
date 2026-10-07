@@ -5,6 +5,3 @@ export { sanitizeLogContext } from './utils/sanitize-log-context.util.js';
 export { createLogger } from './utils/create-logger.util.js';
 export type { LogContext } from './types/log-context.type.js';
 export type { Logger } from './types/logger.interface.js';
-export { RobustnessMetrics } from './services/robustness-metrics.class.js';
-export type { RobustnessMetricName } from './types/robustness-metric-name.type.js';
-export type { RobustnessMetricsSnapshot } from './types/robustness-metrics-snapshot.type.js';
