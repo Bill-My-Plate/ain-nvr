@@ -1,9 +1,4 @@
-
-
-import type { Logger } from '../../shared/index.js';
 import type { H264CodecConfiguration } from '../../h264/index.js';
-
-
 
 import type { PlaybackRtpInfo } from './playback-rtp-info.type.js';
 
@@ -12,6 +7,5 @@ export type PlaybackRtspServerOptions = {
   readonly videoRtpInfo: PlaybackRtpInfo;
   readonly audioRtpInfo?: PlaybackRtpInfo;
   readonly audioSampleRate?: number;
-  readonly logger?: Logger;
   readonly maximumQueuedBytes?: number;
 };

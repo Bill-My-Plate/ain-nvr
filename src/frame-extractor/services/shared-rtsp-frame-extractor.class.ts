@@ -14,7 +14,6 @@ export class SharedRtspFrameExtractor {
   constructor(private readonly options: SharedRtspFrameExtractorOptions) {
     this.bridge = new RtspLoopbackBridge({
       source: options.source,
-      ...(options.logger === undefined ? {} : { logger: options.logger }),
       ...(options.onError === undefined ? {} : { onError: options.onError }),
       ...(options.bridge ?? {}),
     });

@@ -38,9 +38,6 @@ export class PlaybackRtspServer {
     this.playPromise.catch(() => undefined);
     this.server = net.createServer((socket) => this.accept(socket));
     this.server.on('error', (error) => {
-      if (!this.stopped) {
-        this.options.logger?.warn('Playback RTSP server failed.', { error });
-      }
       this.playReject?.(error);
     });
   }
@@ -139,9 +136,6 @@ export class PlaybackRtspServer {
     this.client = client;
     socket.on('data', (chunk: Buffer) => this.receive(client, chunk));
     socket.on('error', (error) => {
-      if (!this.stopped) {
-        this.options.logger?.warn('Playback RTSP client failed.', { error });
-      }
       this.playReject?.(error);
     });
     socket.on('close', () => {

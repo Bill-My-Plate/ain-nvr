@@ -5,5 +5,5 @@ import { type RtspUrlFrameExtractorOptions } from './rtsp-url-frame-extractor-op
 export interface SharedRtspFrameExtractorOptions
   extends Omit<RtspUrlFrameExtractorOptions, 'url'> {
   readonly source: RtspLoopbackBridgeOptions['source'];
-  readonly bridge?: Omit<RtspLoopbackBridgeOptions, 'source' | 'logger' | 'onError'>;
+  readonly bridge?: Omit<RtspLoopbackBridgeOptions, 'source' | 'onError'>;
 }

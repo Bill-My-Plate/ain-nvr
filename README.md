@@ -125,7 +125,7 @@ Do not use a `linuxstatic` target because native addons require dynamic loading.
 
 | Import | Purpose |
 | --- | --- |
-| `ain-nvr` | Version, errors, logger, and managed camera runtime |
+| `ain-nvr` | Version, errors, and managed camera runtime |
 | `ain-nvr/rtsp-parser` | Streaming RTSP and `$` interleaved parsers |
 | `ain-nvr/rtsp-client` | RTSP handshake, authentication, keepalive, and media timeout |
 | `ain-nvr/rtp-parser` | RTP, RTCP, ordering, and clock helpers |

@@ -1,5 +1,3 @@
-import type { Logger } from '../../shared/index.js';
-
 import { type DecoderHostCapabilities } from './decoder-host-capabilities.interface.js';
 
 import type { LibavRuntime } from './libav-runtime.type.js';
@@ -12,7 +10,6 @@ export interface RtspUrlFrameExtractorOptions {
   readonly runtime: LibavRuntime;
   readonly onFrame: (frame: ExtractedJpegFrame) => Promise<void> | void;
   readonly onError?: (error: Error) => void;
-  readonly logger?: Logger;
   readonly framesPerSecond?: number;
   readonly jpegQuality?: number;
   readonly mediaTimeoutMs?: number;

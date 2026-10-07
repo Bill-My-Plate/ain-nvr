@@ -10,19 +10,11 @@ import type { LibavFormatContextLike } from '../src/frame-extractor/types/libav-
 import type { LibavFrameLike } from '../src/frame-extractor/types/libav-frame-like.type.js';
 import type { LibavPacketLike } from '../src/frame-extractor/types/libav-packet-like.type.js';
 import type { LibavStreamLike } from '../src/frame-extractor/types/libav-stream-like.type.js';
-import type { Logger } from '../src/shared/types/logger.interface.js';
 import { createPlaybackStream } from '../src/playback/utils/create-playback-stream.util.js';
 import { type PlaybackSource } from '../src/playback/types/playback-source.interface.js';
 import type { RecordedByteSource } from '../src/recorded-stream-parser/types/recorded-byte-source.interface.js';
 import type { RecordedSegmentDescriptor } from '../src/recorded-stream-parser/types/recorded-segment-descriptor.interface.js';
 import { createBaselineSps, createRtp, interleaved, videoTrack } from './helpers/media.js';
-
-const logger: Logger = {
-  debug: () => undefined,
-  info: () => undefined,
-  warn: () => undefined,
-  error: () => undefined,
-};
 
 test('frame sampler has no catch-up burst after a stall', () => {
   const sampler = new FrameSampler(4);
@@ -77,7 +69,6 @@ test('decoder order follows platform policy and falls back to software', async (
     1,
     [{ label: 'hardware', hardwareDevice: 'vaapi' }, { label: 'software' }],
     new AbortController().signal,
-    logger,
   );
   assert.equal(selection.candidate.label, 'software');
   assert.equal(selection.firstFrame, frame);

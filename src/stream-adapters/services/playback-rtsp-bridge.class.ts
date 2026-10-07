@@ -86,7 +86,6 @@ export class PlaybackRtspBridge {
         ...(this.options.audioSampleRate === undefined
           ? {}
           : { audioSampleRate: this.options.audioSampleRate }),
-        ...(this.options.logger === undefined ? {} : { logger: this.options.logger }),
         ...(this.options.maximumQueuedBytes === undefined
           ? {}
           : { maximumQueuedBytes: this.options.maximumQueuedBytes }),

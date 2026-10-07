@@ -30,7 +30,6 @@ export class RtspSessionManager {
     if (managed === undefined) {
       const session = new RtspStreamSession({
         url: input.url,
-        ...(this.options.logger === undefined ? {} : { logger: this.options.logger }),
         ...(this.options.reconnectInitialMs === undefined
           ? {}
           : { reconnectInitialMs: this.options.reconnectInitialMs }),

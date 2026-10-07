@@ -1,13 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import net, { type Server, type Socket } from 'node:net';
-import type { Logger } from '../../shared/index.js';
 import type { TrackDescription } from '../../media/index.js';
 import { createH264CodecConfiguration, H264ConfigurationTracker, type H264CodecConfiguration } from '../../h264/index.js';
 import { getRtspHeader, type RtspMessage } from '../../rtsp-parser/index.js';
 import { RtspMixedParser } from '../../rtsp-parser/index.js';
 import type { MediaPacket } from '../../media/index.js';
 
-import { NOOP_LOGGER } from '../constants/noop-logger.constant.js';
 import type { RtspLoopbackBridgeOptions } from '../types/rtsp-loopback-bridge-options.interface.js';
 import type { RtspLoopbackBridgeStatus } from '../types/rtsp-loopback-bridge-status.interface.js';
 import type { BufferedFrame } from '../types/buffered-frame.type.js';
@@ -20,7 +18,6 @@ import { parseInterleavedChannels } from '../utils/parse-interleaved-channels.ut
 import { interleavedFrame } from '../utils/rtsp-loopback-bridge-interleaved-frame.util.js';
 
 export class RtspLoopbackBridge {
-  private readonly logger: Logger;
   private readonly maximumPrerollBytes: number;
   private readonly maximumPrerollPackets: number;
   private readonly maximumClientQueuedBytes: number;
@@ -45,7 +42,6 @@ export class RtspLoopbackBridge {
   private urlValue: string | undefined;
 
   constructor(private readonly options: RtspLoopbackBridgeOptions) {
-    this.logger = options.logger ?? NOOP_LOGGER;
     this.maximumPrerollBytes = positiveInteger(
       options.maximumPrerollBytes,
       8 * 1024 * 1024,
@@ -381,6 +377,5 @@ export class RtspLoopbackBridge {
 
   private reportError(error: Error): void {
     this.options.onError?.(error);
-    this.logger.warn('RTSP loopback bridge error.', { error });
   }
 }

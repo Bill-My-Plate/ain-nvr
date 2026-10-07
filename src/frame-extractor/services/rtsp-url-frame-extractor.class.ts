@@ -1,4 +1,3 @@
-import type { Logger } from '../../shared/index.js';
 import { AinNvrError } from '../../shared/index.js';
 import { decoderCandidates } from '../utils/decoder-candidates.util.js';
 import { detectDecoderHostCapabilities } from '../utils/detect-decoder-host-capabilities.util.js';
@@ -10,7 +9,6 @@ import type { LibavDecoderLike } from '../types/libav-decoder-like.type.js';
 import type { LibavFormatContextLike } from '../types/libav-format-context-like.type.js';
 import type { LibavFrameLike } from '../types/libav-frame-like.type.js';
 
-import { NOOP_LOGGER } from '../constants/noop-logger.constant.js';
 import type { FrameExtractorState } from '../types/frame-extractor-state.type.js';
 import type { RtspUrlFrameExtractorOptions } from '../types/rtsp-url-frame-extractor-options.interface.js';
 import type { QueuedFrame } from '../types/queued-frame.type.js';
@@ -19,7 +17,6 @@ import { delay } from '../utils/delay.util.js';
 import { selectH264Stream } from '../utils/select-h264-stream.util.js';
 
 export class RtspUrlFrameExtractor {
-  private readonly logger: Logger;
   private readonly framesPerSecond: number;
   private readonly jpegQuality: number;
   private readonly mediaTimeoutMs: number;
@@ -38,7 +35,6 @@ export class RtspUrlFrameExtractor {
   private droppedFrames = 0;
 
   constructor(private readonly options: RtspUrlFrameExtractorOptions) {
-    this.logger = options.logger ?? NOOP_LOGGER;
     this.framesPerSecond = options.framesPerSecond ?? 4;
     this.jpegQuality = options.jpegQuality ?? 0.9;
     this.mediaTimeoutMs = positiveInteger(options.mediaTimeoutMs, 15_000, 'mediaTimeoutMs');
@@ -87,10 +83,6 @@ export class RtspUrlFrameExtractor {
     this.runPromise ??= this.run().catch((error: unknown) => {
       const failure = error instanceof Error ? error : new Error(String(error));
       this.options.onError?.(failure);
-      this.logger.error('Frame extractor stopped after a fatal error.', {
-        id: this.options.id,
-        error: failure,
-      });
       this.stateValue = 'stopped';
     });
   }
@@ -117,11 +109,6 @@ export class RtspUrlFrameExtractor {
         if (this.stopController.signal.aborted) break;
         const failure = error instanceof Error ? error : new Error(String(error));
         this.options.onError?.(failure);
-        this.logger.warn('Frame extraction failed; reconnecting.', {
-          id: this.options.id,
-          error: failure,
-          reconnectMs,
-        });
         if (this.decodedFrames > decodedBefore) reconnectMs = this.reconnectInitialMs;
         try {
           await delay(reconnectMs, this.stopController.signal);
@@ -225,7 +212,6 @@ export class RtspUrlFrameExtractor {
         this.options.runtime.keyPacketFlag,
         decoderCandidates(this.capabilities),
         sessionController.signal,
-        this.logger,
       );
       decoder = selection.decoder;
       this.stateValue = 'extracting';

@@ -188,10 +188,7 @@
     "ain-nvr": [
       "AIN_NVR_VERSION",
       "AinNvrError",
-      "createLogger",
-      "getCameraRuntime",
-      "redactSensitiveText",
-      "sanitizeLogContext"
+      "getCameraRuntime"
     ],
     "ain-nvr/rtsp-parser": [
       "ByteQueue",
@@ -347,7 +344,6 @@
     "rtsp-parser:SdpDescription",
     "rtsp-parser:SdpMediaDescription",
     "rtsp-parser:SdpRtpMap",
-    "shared:Logger",
     "stream-adapters:PlaybackRtspBridgeOptions",
     "stream-adapters:PlaybackRtspBridgeStart",
     "stream-adapters:RtpUdpForwarderOptions",

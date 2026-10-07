@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events';
-import type { Logger } from '../../shared/index.js';
 import { AinNvrError } from '../../shared/index.js';
 import type { TrackDescription } from '../../media/index.js';
 import { H264AccessUnitAssembler } from '../../h264/index.js';
@@ -10,7 +9,6 @@ import { findRtcpSenderReport } from '../../rtp-parser/index.js';
 import { RtspClient, type RtspClientSession } from '../../rtsp-client/index.js';
 import type { RtspInterleavedFrame } from '../../rtsp-parser/index.js';
 
-import { NOOP_LOGGER } from '../constants/noop-logger.constant.js';
 import type { SessionState } from '../types/session-state.type.js';
 import type { MediaPacket } from '../../media/index.js';
 import type { RtspStreamSessionOptions } from '../types/rtsp-stream-session-options.interface.js';
@@ -23,7 +21,6 @@ import { abortableDelay } from '../utils/abortable-delay.util.js';
 import { sessionInfoFromSession } from '../utils/session-info-from-session.util.js';
 
 export class RtspStreamSession extends EventEmitter {
-  private readonly logger: Logger;
   private readonly reconnectInitialMs: number;
   private readonly reconnectMaximumMs: number;
   private readonly clientFactory: (url: string) => RtspClient;
@@ -47,7 +44,6 @@ export class RtspStreamSession extends EventEmitter {
 
   constructor(private readonly options: RtspStreamSessionOptions) {
     super();
-    this.logger = options.logger ?? NOOP_LOGGER;
     this.reconnectInitialMs = positiveInteger(
       options.reconnectInitialMs,
       1_000,
@@ -185,10 +181,6 @@ export class RtspStreamSession extends EventEmitter {
       } catch (error) {
         if (this.stopController.signal.aborted) break;
         const failure = error instanceof Error ? error : new Error(String(error));
-        this.logger.warn('RTSP stream session disconnected; reconnecting.', {
-          error: failure,
-          reconnectDelayMs: delayMs,
-        });
         this.emit('reconnecting', failure);
         if (!connectedOnce) this.emit('initial-error', failure);
         try {

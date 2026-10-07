@@ -1,6 +1,3 @@
-
-
-import type { Logger } from '../../shared/index.js';
 import type { LibavDecoderLike } from '../types/libav-decoder-like.type.js';
 import type { LibavFormatContextLike } from '../types/libav-format-context-like.type.js';
 import type { LibavPacketLike } from '../types/libav-packet-like.type.js';
@@ -17,7 +14,6 @@ export async function selectDecoder(
   keyPacketFlag: number,
   candidates: readonly DecoderCandidate[],
   signal: AbortSignal,
-  logger: Logger,
 ): Promise<DecoderSelection> {
   const packets: LibavPacketLike[] = [];
   let packetBytes = 0;
@@ -34,7 +30,6 @@ export async function selectDecoder(
   let lastError: unknown;
 
   try {
-    logger.info('Waiting for a video keyframe.', { streamIndex: stream.index });
     while (true) {
       signal.throwIfAborted();
       const packet = await context.readFrame();
@@ -57,7 +52,6 @@ export async function selectDecoder(
       signal.throwIfAborted();
       let decoder: LibavDecoderLike | undefined;
       try {
-        logger.info('Trying video decoder.', { decoder: candidate.label });
         decoder = createCandidateDecoder(context, stream.index, candidate);
 
         for (const packet of packets) {
@@ -99,10 +93,6 @@ export async function selectDecoder(
         decoder = undefined;
         signal.throwIfAborted();
         lastError = error;
-        logger.warn('Video decoder candidate failed.', {
-          decoder: candidate.label,
-          error,
-        });
       }
     }
   } finally {
