@@ -1,5 +1,1 @@
-
-
-
-
-export const HEADER_TERMINATOR = Buffer.from('\r\n\r\n', 'ascii');
+export const HEADER_TERMINATOR = Buffer.from("\r\n\r\n", "ascii");
