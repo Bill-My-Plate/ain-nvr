@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import net, { type Server, type Socket } from 'node:net';
 import type { TrackDescription } from '../../media/index.js';
 import { createH264CodecConfiguration, H264ConfigurationTracker, type H264CodecConfiguration } from '../../h264/index.js';
-import { getRtspHeader, type RtspMessage } from '../../rtsp-parser/index.js';
+import { type RtspMessage } from '../../rtsp-parser/index.js';
 import { RtspMixedParser } from '../../rtsp-parser/index.js';
 import type { MediaPacket } from '../../media/index.js';
 
@@ -191,7 +191,7 @@ export class RtspLoopbackBridge {
         return;
       }
       case 'SETUP': {
-        const channels = parseInterleavedChannels(getRtspHeader(request, 'transport'));
+        const channels = parseInterleavedChannels(request.headers.get('transport'));
         if (channels === undefined) {
           this.respond(client, request, 461, 'Unsupported Transport');
           return;
@@ -239,7 +239,7 @@ export class RtspLoopbackBridge {
     headers: Readonly<Record<string, string>> = {},
     body = Buffer.alloc(0),
   ): void {
-    const cseq = getRtspHeader(request, 'cseq');
+    const cseq = request.headers.get('cseq');
     if (cseq === undefined) {
       client.socket.destroy(new Error('Local RTSP client omitted CSeq.'));
       return;

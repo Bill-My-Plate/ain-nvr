@@ -1,10 +1,22 @@
-import { ByteQueue } from '../services/byte-queue.class.js';
-import { RtspParseError } from '../errors/rtsp-parse-error.class.js';
-import { type RtspParserLimits } from '../types/rtsp-parser-limits.interface.js';
+import { ByteQueue } from "../services/byte-queue.class.js";
+import { RtspParseError } from "../errors/rtsp-parse-error.class.js";
+import { type RtspParserLimits } from "../types/rtsp-parser-limits.interface.js";
 
-import { HEADER_TERMINATOR } from '../constants/header-terminator.constant.js';
-import type { RtspMessage } from '../types/rtsp-message.interface.js';
-import { parseHeaderBlock } from './parse-header-block.util.js';
+import { HEADER_TERMINATOR } from "../constants/header-terminator.constant.js";
+import { RTSP_INTERLEAVED_MAGIC } from "../constants/rtsp-interleaved-magic.constant.js";
+import type { RtspMessage } from "../types/rtsp-message.interface.js";
+import { parseHeaderBlock } from "./parse-header-block.util.js";
+
+/*
+RTSP Text Message
+
+  RTSP/1.0 200 OK\r\n
+  CSeq: 2\r\n
+  Content-Type: application/sdp\r\n
+  Content-Length: 12\r\n
+  \r\n
+  [12 body bytes]
+*/
 
 export function tryReadRtspMessage(
   queue: ByteQueue,
@@ -14,10 +26,10 @@ export function tryReadRtspMessage(
     return undefined;
   }
 
-  if (queue.peekByte(0) === 0x24) {
+  if (queue.peekByte(0) === RTSP_INTERLEAVED_MAGIC) {
     throw new RtspParseError(
-      'unexpected_interleaved_frame',
-      'An interleaved frame was passed to an RTSP message-only parser.',
+      "unexpected_interleaved_frame",
+      "An interleaved frame was passed to an RTSP message-only parser.",
     );
   }
 
@@ -25,7 +37,7 @@ export function tryReadRtspMessage(
   if (headerEnd < 0) {
     if (queue.length > limits.maxHeaderBytes) {
       throw new RtspParseError(
-        'rtsp_header_too_large',
+        "rtsp_header_too_large",
         `RTSP header exceeds the ${limits.maxHeaderBytes} byte limit.`,
       );
     }
@@ -35,7 +47,7 @@ export function tryReadRtspMessage(
   const headerLength = headerEnd + HEADER_TERMINATOR.length;
   if (headerLength > limits.maxHeaderBytes) {
     throw new RtspParseError(
-      'rtsp_header_too_large',
+      "rtsp_header_too_large",
       `RTSP header exceeds the ${limits.maxHeaderBytes} byte limit.`,
     );
   }
@@ -50,7 +62,7 @@ export function tryReadRtspMessage(
   queue.discard(headerLength);
   const body = queue.read(parsed.contentLength);
   return {
-    type: 'rtsp-message',
+    type: "rtsp-message",
     startLine: parsed.startLine,
     headers: parsed.headers,
     body,

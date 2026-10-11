@@ -4,7 +4,7 @@ export {
   type RtspInterleavedFrame,
 } from '../rtsp-parser/index.js';
 export {
-  getRtspHeader,
+  RtspHeaders,
   RtspMessageParser,
   tryReadRtspMessage,
   type RtspMessage,

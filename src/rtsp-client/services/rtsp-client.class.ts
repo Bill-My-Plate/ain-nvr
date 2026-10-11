@@ -8,7 +8,7 @@ import { type DigestAuthorizationState } from '../types/digest-authorization-sta
 import { type RtspAuthChallenge } from '../types/rtsp-auth-challenge.type.js';
 import { type RtspCredentials } from '../types/rtsp-credentials.interface.js';
 import type { RtspInterleavedFrame } from '../../rtsp-parser/index.js';
-import { getRtspHeader, type RtspMessage } from '../../rtsp-parser/index.js';
+import { type RtspMessage } from '../../rtsp-parser/index.js';
 import { RtspMixedParser } from '../../rtsp-parser/index.js';
 import { parseSdp, resolveRtspControlUrl, selectG711AudioMedia, selectH264VideoMedia } from '../../rtsp-parser/index.js';
 
@@ -121,8 +121,8 @@ export class RtspClient extends EventEmitter {
       if (selected === undefined || !selected.media.control) {
         throw new AinNvrError('unsupported_codec', 'DESCRIBE response has no controlled H.264 video track.');
       }
-      const contentBase = getRtspHeader(describe, 'content-base')
-        ?? getRtspHeader(describe, 'content-location');
+      const contentBase = describe.headers.get('content-base')
+        ?? describe.headers.get('content-location');
       const controlUrl = resolveRtspControlUrl(
         this.requestUrl,
         selected.media.control,
@@ -133,9 +133,9 @@ export class RtspClient extends EventEmitter {
       const setup = await this.request('SETUP', controlUrl, {
         headers: { Transport: 'RTP/AVP/TCP;unicast;interleaved=0-1' },
       });
-      const session = parseSession(getRtspHeader(setup, 'session'));
+      const session = parseSession(setup.headers.get('session'));
       this.sessionId = session.sessionId;
-      const videoChannels = interleavedChannels(getRtspHeader(setup, 'transport'), 0, 1);
+      const videoChannels = interleavedChannels(setup.headers.get('transport'), 0, 1);
       const { rtpChannel, rtcpChannel } = videoChannels;
 
       let audio: RtspAudioTrack | undefined;
@@ -155,7 +155,7 @@ export class RtspClient extends EventEmitter {
             },
           });
           const audioChannels = interleavedChannels(
-            getRtspHeader(audioSetup, 'transport'),
+            audioSetup.headers.get('transport'),
             2,
             3,
           );
@@ -275,7 +275,7 @@ export class RtspClient extends EventEmitter {
       if (this.credentials === undefined) {
         throw new RtspClientError('Camera requires credentials.', 401);
       }
-      const authenticate = getRtspHeader(response, 'www-authenticate');
+      const authenticate = response.headers.get('www-authenticate');
       if (!authenticate) {
         throw new RtspClientError('Authentication response lacks WWW-Authenticate.', 401);
       }
@@ -349,7 +349,7 @@ export class RtspClient extends EventEmitter {
           this.respondToServerRequest(item);
           continue;
         }
-        const rawSequence = getRtspHeader(item, 'cseq');
+        const rawSequence = item.headers.get('cseq');
         const cseq = rawSequence === undefined ? Number.NaN : Number(rawSequence);
         const pending = this.pending.get(cseq);
         if (pending !== undefined) {
@@ -368,7 +368,7 @@ export class RtspClient extends EventEmitter {
     if (socket === undefined || socket.destroyed) {
       return;
     }
-    const cseq = getRtspHeader(request, 'cseq');
+    const cseq = request.headers.get('cseq');
     socket.write(Buffer.from(
       `RTSP/1.0 200 OK\r\n${cseq === undefined ? '' : `CSeq: ${cseq}\r\n`}Content-Length: 0\r\n\r\n`,
       'ascii',

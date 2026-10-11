@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import net, { type Server, type Socket } from 'node:net';
 
 
-import { getRtspHeader, type RtspMessage } from '../../rtsp-parser/index.js';
+import { type RtspMessage } from '../../rtsp-parser/index.js';
 import { RtspMixedParser } from '../../rtsp-parser/index.js';
 
 import type { ClientState } from '../types/client-state.type.js';
@@ -183,7 +183,7 @@ export class PlaybackRtspServer {
       }
       case 'SETUP': {
         const track = this.trackFromUri(request.startLine.uri);
-        const channels = parseChannels(getRtspHeader(request, 'transport'));
+        const channels = parseChannels(request.headers.get('transport'));
         if (track === undefined || channels === undefined
           || (track === 1 && this.options.audioSampleRate === undefined)) {
           this.respond(client, request, 461, 'Unsupported Transport');
@@ -228,7 +228,7 @@ export class PlaybackRtspServer {
     body = Buffer.alloc(0),
   ): void {
     if (client.socket.destroyed || client.socket.writableEnded) return;
-    const cseq = getRtspHeader(request, 'cseq');
+    const cseq = request.headers.get('cseq');
     if (cseq === undefined) {
       client.socket.destroy(new Error('Local RTSP client omitted CSeq.'));
       return;

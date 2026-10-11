@@ -5,13 +5,13 @@ import { type RtspParserLimits } from '../types/rtsp-parser-limits.interface.js'
 import { HEADER_TERMINATOR } from '../constants/header-terminator.constant.js';
 import { HEADER_NAME_PATTERN } from '../constants/header-name-pattern.constant.js';
 import { CONTENT_LENGTH_PATTERN } from '../constants/content-length-pattern.constant.js';
-import type { ParsedHeader } from '../types/parsed-header.type.js';
+import { RtspHeaders } from '../services/rtsp-headers.class.js';
 import { parseStartLine } from './parse-start-line.util.js';
 
 export function parseHeaderBlock(
   rawHeader: Buffer,
   limits: RtspParserLimits,
-): ParsedHeader {
+) {
   const text = rawHeader.subarray(0, rawHeader.length - HEADER_TERMINATOR.length)
     .toString('latin1');
   const lines = text.split('\r\n');
@@ -24,7 +24,7 @@ export function parseHeaderBlock(
   }
 
   const startLine = parseStartLine(rawStartLine);
-  const headers = new Map<string, string>();
+  const headers = new RtspHeaders();
 
   for (const line of lines) {
     const separator = line.indexOf(':');
@@ -43,10 +43,9 @@ export function parseHeaderBlock(
       );
     }
 
-    const name = originalName.toLowerCase();
     const value = line.slice(separator + 1).trim();
-    const previous = headers.get(name);
-    headers.set(name, previous === undefined ? value : `${previous}, ${value}`);
+    const previous = headers.get(originalName);
+    headers.set(originalName, previous === undefined ? value : `${previous}, ${value}`);
   }
 
   const rawContentLength = headers.get('content-length');

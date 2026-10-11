@@ -69,8 +69,13 @@ export class ByteQueue {
     // Use the native search when the entire search window is contiguous.
     // This temporary view never escapes the queue.
     const first = this.chunks[this.headIndex];
-    if (first !== undefined && first.length - this.headOffset >= searchableBytes) {
-      return first.subarray(this.headOffset, this.headOffset + searchableBytes).indexOf(sequence);
+    if (
+      first !== undefined &&
+      first.length - this.headOffset >= searchableBytes
+    ) {
+      return first
+        .subarray(this.headOffset, this.headOffset + searchableBytes)
+        .indexOf(sequence);
     }
 
     // KMP fallback lengths let a mismatch reuse a matched prefix instead of
@@ -89,7 +94,11 @@ export class ByteQueue {
     // matched carries across chunks; scanned counts bytes before this chunk.
     let scanned = 0;
     let matched = 0;
-    for (let chunkIndex = this.headIndex; scanned < searchableBytes; chunkIndex += 1) {
+    for (
+      let chunkIndex = this.headIndex;
+      scanned < searchableBytes;
+      chunkIndex += 1
+    ) {
       const chunk = this.chunks[chunkIndex];
       if (chunk === undefined) {
         throw new Error("Byte queue length invariant failed.");

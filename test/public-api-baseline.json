@@ -193,11 +193,11 @@
     "ain-nvr/rtsp-parser": [
       "ByteQueue",
       "DEFAULT_RTSP_PARSER_LIMITS",
+      "RtspHeaders",
       "RtspInterleavedParser",
       "RtspMessageParser",
       "RtspMixedParser",
       "RtspParseError",
-      "getRtspHeader",
       "parseSdp",
       "resolveRtspControlUrl",
       "resolveRtspParserLimits",

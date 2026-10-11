@@ -1,13 +1,10 @@
-
-
-
-
-import type { RtspStartLine } from './rtsp-start-line.type.js';
+import type { RtspStartLine } from "./rtsp-start-line.type.js";
+import type { RtspHeaders } from "../services/rtsp-headers.class.js";
 
 export interface RtspMessage {
-  readonly type: 'rtsp-message';
+  readonly type: "rtsp-message";
   readonly startLine: RtspStartLine;
-  readonly headers: ReadonlyMap<string, string>;
+  readonly headers: RtspHeaders;
   readonly body: Buffer;
   readonly rawHeader: Buffer;
 }

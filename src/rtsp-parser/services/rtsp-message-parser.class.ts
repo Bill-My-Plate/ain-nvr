@@ -1,10 +1,10 @@
-import { ByteQueue } from './byte-queue.class.js';
-import { RtspParseError } from '../errors/rtsp-parse-error.class.js';
-import { resolveRtspParserLimits } from '../utils/resolve-rtsp-parser-limits.util.js';
-import { type RtspParserLimits } from '../types/rtsp-parser-limits.interface.js';
+import { ByteQueue } from "./byte-queue.class.js";
+import { RtspParseError } from "../errors/rtsp-parse-error.class.js";
+import { resolveRtspParserLimits } from "../utils/resolve-rtsp-parser-limits.util.js";
+import { tryReadRtspMessage } from "../utils/try-read-rtsp-message.util.js";
 
-import type { RtspMessage } from '../types/rtsp-message.interface.js';
-import { tryReadRtspMessage } from '../utils/try-read-rtsp-message.util.js';
+import type { RtspParserLimits } from "../types/rtsp-parser-limits.interface.js";
+import type { RtspMessage } from "../types/rtsp-message.interface.js";
 
 export class RtspMessageParser {
   private readonly queue = new ByteQueue();
@@ -14,11 +14,11 @@ export class RtspMessageParser {
     this.limits = resolveRtspParserLimits(limits);
   }
 
-  get bufferedBytes(): number {
+  public get bufferedBytes(): number {
     return this.queue.length;
   }
 
-  push(chunk: Buffer): RtspMessage[] {
+  public push(chunk: Buffer): RtspMessage[] {
     this.queue.push(chunk);
     const messages: RtspMessage[] = [];
 
@@ -33,16 +33,16 @@ export class RtspMessageParser {
     return messages;
   }
 
-  finish(): void {
+  public finish(): void {
     if (this.queue.length > 0) {
       throw new RtspParseError(
-        'incomplete_input',
+        "incomplete_input",
         `RTSP input ended with ${this.queue.length} buffered bytes.`,
       );
     }
   }
 
-  reset(): void {
+  public reset(): void {
     this.queue.clear();
   }
 }
