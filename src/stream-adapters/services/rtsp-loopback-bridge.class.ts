@@ -3,7 +3,7 @@ import net, { type Server, type Socket } from 'node:net';
 import type { TrackDescription } from '../../media/index.js';
 import { createH264CodecConfiguration, H264ConfigurationTracker, type H264CodecConfiguration } from '../../h264/index.js';
 import { type RtspMessage } from '../../rtsp-parser/index.js';
-import { RtspMixedParser } from '../../rtsp-parser/index.js';
+import { RtspParser } from '../../rtsp-parser/index.js';
 import type { MediaPacket } from '../../media/index.js';
 
 import type { RtspLoopbackBridgeOptions } from '../types/rtsp-loopback-bridge-options.interface.js';
@@ -142,7 +142,7 @@ export class RtspLoopbackBridge {
     }
     const client: BridgeClient = {
       socket,
-      parser: new RtspMixedParser(),
+      parser: new RtspParser(),
       sessionId: randomBytes(8).toString('hex'),
       rtpChannel: 0,
       rtcpChannel: 1,

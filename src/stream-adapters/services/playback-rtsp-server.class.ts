@@ -3,7 +3,7 @@ import net, { type Server, type Socket } from 'node:net';
 
 
 import { type RtspMessage } from '../../rtsp-parser/index.js';
-import { RtspMixedParser } from '../../rtsp-parser/index.js';
+import { RtspParser } from '../../rtsp-parser/index.js';
 
 import type { ClientState } from '../types/client-state.type.js';
 import type { PlaybackRtspServerOptions } from '../types/playback-rtsp-server-options.type.js';
@@ -128,7 +128,7 @@ export class PlaybackRtspServer {
     socket.setNoDelay(true);
     const client: ClientState = {
       socket,
-      parser: new RtspMixedParser(),
+      parser: new RtspParser(),
       sessionId: randomBytes(8).toString('hex'),
       channels: new Map(),
       playing: false,

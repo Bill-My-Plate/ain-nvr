@@ -1,17 +1,14 @@
 export { ByteQueue } from '../rtsp-parser/index.js';
-export {
-  RtspInterleavedParser,
-  type RtspInterleavedFrame,
-} from '../rtsp-parser/index.js';
+export type { RtspInterleavedFrame } from '../rtsp-parser/index.js';
 export {
   RtspHeaders,
-  RtspMessageParser,
+  RtspParser,
   tryReadRtspMessage,
   type RtspMessage,
   type RtspRequestLine,
   type RtspResponseLine,
 } from '../rtsp-parser/index.js';
-export { RtspMixedParser, type RtspStreamItem } from '../rtsp-parser/index.js';
+export type { RtspStreamItem, RtspParserMode, RtspParserOptions } from '../rtsp-parser/index.js';
 export { RtspParseError } from '../rtsp-parser/index.js';
 export {
   DEFAULT_RTSP_PARSER_LIMITS,

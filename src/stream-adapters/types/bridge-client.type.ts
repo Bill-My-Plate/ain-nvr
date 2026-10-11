@@ -4,12 +4,12 @@ import { type Socket } from 'node:net';
 
 
 
-import { RtspMixedParser } from '../../rtsp-parser/index.js';
+import type { RtspParser } from '../../rtsp-parser/index.js';
 
 
 export type BridgeClient = {
   readonly socket: Socket;
-  readonly parser: RtspMixedParser;
+  readonly parser: RtspParser;
   readonly sessionId: string;
   rtpChannel: number;
   rtcpChannel: number;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { RtspHeaders, RtspMessageParser } from '../src/rtsp-parser/index.js';
+import { RtspHeaders, RtspParser } from '../src/rtsp-parser/index.js';
 
 test('RtspHeaders stores and looks up names without regard to case', () => {
   const headers = new RtspHeaders();
@@ -15,11 +15,12 @@ test('RtspHeaders stores and looks up names without regard to case', () => {
 });
 
 test('RTSP parser uses case-insensitive headers and merges duplicate names', () => {
-  const parser = new RtspMessageParser();
+  const parser = new RtspParser({ mode: 'message' });
   const [message] = parser.push(Buffer.from(
     'RTSP/1.0 200 OK\r\nContent-Length: 4\r\nX-Trace: one\r\nx-trace: two\r\n\r\ntest',
   ));
   assert.ok(message);
+  if (message.type !== 'rtsp-message') throw new Error('Expected an RTSP message.');
   assert.ok(message.headers instanceof RtspHeaders);
   assert.equal(message.body.toString(), 'test');
   assert.equal(message.headers.get('CONTENT-LENGTH'), '4');

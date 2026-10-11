@@ -9,7 +9,7 @@ import { type RtspAuthChallenge } from '../types/rtsp-auth-challenge.type.js';
 import { type RtspCredentials } from '../types/rtsp-credentials.interface.js';
 import type { RtspInterleavedFrame } from '../../rtsp-parser/index.js';
 import { type RtspMessage } from '../../rtsp-parser/index.js';
-import { RtspMixedParser } from '../../rtsp-parser/index.js';
+import { RtspParser } from '../../rtsp-parser/index.js';
 import { parseSdp, resolveRtspControlUrl, selectG711AudioMedia, selectH264VideoMedia } from '../../rtsp-parser/index.js';
 
 import type { RtspClientOptions } from '../types/rtsp-client-options.interface.js';
@@ -33,7 +33,7 @@ export class RtspClient extends EventEmitter {
   private readonly mediaTimeoutMs: number;
   private readonly socketFactory: (port: number, host: string) => Socket;
   private readonly connectEvent: 'connect' | 'secureConnect';
-  private readonly parser = new RtspMixedParser();
+  private readonly parser = new RtspParser();
   private readonly pending = new Map<number, PendingRequest>();
   private socket: Socket | undefined;
   private sequence = 0;
