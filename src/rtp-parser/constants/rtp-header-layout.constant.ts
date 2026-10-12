@@ -1,0 +1,21 @@
+/** Byte offsets, field sizes, and bit masks for the RTP version 2 header. */
+export const RTP_HEADER_LAYOUT = {
+  version: 2,
+  versionShift: 6,
+  fixedHeaderBytes: 12,
+  firstByteOffset: 0,
+  secondByteOffset: 1,
+  sequenceNumberOffset: 2,
+  timestampOffset: 4,
+  ssrcOffset: 8,
+  csrcIdentifierBytes: 4,
+  extensionHeaderBytes: 4,
+  extensionLengthOffset: 2,
+  extensionLengthWordBytes: 4,
+  paddingCountFromEnd: 1,
+  paddingFlag: 0x20,
+  extensionFlag: 0x10,
+  csrcCountMask: 0x0f,
+  markerFlag: 0x80,
+  payloadTypeMask: 0x7f,
+} as const;

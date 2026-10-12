@@ -1,39 +1,44 @@
 import { NTP_UNIX_EPOCH_SECONDS } from '../constants/ntp-unix-epoch-seconds.constant.js';
+import { RTCP_PACKET_LAYOUT } from '../constants/rtcp-packet-layout.constant.js';
 import type { RtcpSenderReport } from '../types/rtcp-sender-report.interface.js';
 import { RtcpPacketError } from '../errors/rtcp-packet-error.class.js';
 
 export function parseRtcpSenderReport(packet: Buffer): RtcpSenderReport {
-  if (packet.length < 28) {
+  const senderReport = RTCP_PACKET_LAYOUT.senderReport;
+  if (packet.length < senderReport.fixedBytes) {
     throw new RtcpPacketError('RTCP Sender Report is truncated.');
   }
-  const first = packet[0] ?? 0;
-  if (first >>> 6 !== 2) {
+  const first = packet[RTCP_PACKET_LAYOUT.firstByteOffset] ?? 0;
+  if (first >>> RTCP_PACKET_LAYOUT.versionShift !== RTCP_PACKET_LAYOUT.version) {
     throw new RtcpPacketError('Unsupported RTCP version.');
   }
-  if (packet[1] !== 200) {
+  if (packet[RTCP_PACKET_LAYOUT.packetTypeOffset] !== RTCP_PACKET_LAYOUT.senderReportType) {
     throw new RtcpPacketError('RTCP packet is not a Sender Report.');
   }
 
-  const reportCount = first & 0x1f;
-  const packetLength = (packet.readUInt16BE(2) + 1) * 4;
-  const minimumLength = 28 + reportCount * 24;
+  const reportCount = first & senderReport.reportCountMask;
+  const lengthField = packet.readUInt16BE(RTCP_PACKET_LAYOUT.lengthFieldOffset);
+  const packetLength = (lengthField + RTCP_PACKET_LAYOUT.lengthFieldBiasWords)
+    * RTCP_PACKET_LAYOUT.wordBytes;
+  const minimumLength = senderReport.fixedBytes
+    + reportCount * senderReport.receptionReportBlockBytes;
   if (packetLength < minimumLength || packetLength > packet.length) {
     throw new RtcpPacketError('RTCP Sender Report length is invalid.');
   }
 
-  const ntpSeconds = packet.readUInt32BE(8);
-  const ntpFraction = packet.readUInt32BE(12);
-  const ntpTimeMs = (ntpSeconds - NTP_UNIX_EPOCH_SECONDS) * 1000
-    + ntpFraction * 1000 / 0x1_0000_0000;
+  const ntpSeconds = packet.readUInt32BE(senderReport.ntpSecondsOffset);
+  const ntpFraction = packet.readUInt32BE(senderReport.ntpFractionOffset);
+  const ntpTimeMs = (ntpSeconds - NTP_UNIX_EPOCH_SECONDS) * senderReport.millisecondsPerSecond
+    + ntpFraction * senderReport.millisecondsPerSecond / senderReport.ntpFractionUnitsPerSecond;
 
   return {
-    ssrc: packet.readUInt32BE(4),
+    ssrc: packet.readUInt32BE(senderReport.ssrcOffset),
     ntpSeconds,
     ntpFraction,
     ntpTimeMs,
-    rtpTimestamp: packet.readUInt32BE(16),
-    senderPacketCount: packet.readUInt32BE(20),
-    senderOctetCount: packet.readUInt32BE(24),
+    rtpTimestamp: packet.readUInt32BE(senderReport.rtpTimestampOffset),
+    senderPacketCount: packet.readUInt32BE(senderReport.senderPacketCountOffset),
+    senderOctetCount: packet.readUInt32BE(senderReport.senderOctetCountOffset),
     reportCount,
     packetLength,
   };
