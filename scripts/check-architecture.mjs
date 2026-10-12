@@ -7,7 +7,7 @@ const root = path.resolve('src');
 const modules = new Set([
   'shared', 'rtsp-parser', 'rtp-parser', 'h264', 'media', 'rtsp-client',
   'stream-session', 'recorded-stream-parser', 'recording-parser', 'playback',
-  'playback-wire', 'recording-storage', 'stream-adapters', 'frame-extractor',
+  'recording-storage', 'stream-adapters', 'frame-extractor',
   'camera-runtime',
 ]);
 const allowedModuleEdges = new Map(Object.entries({
@@ -21,7 +21,6 @@ const allowedModuleEdges = new Map(Object.entries({
   'recorded-stream-parser': ['media', 'rtp-parser', 'rtsp-parser', 'shared'],
   'recording-parser': ['h264', 'media', 'rtp-parser', 'shared'],
   playback: ['h264', 'recorded-stream-parser', 'shared'],
-  'playback-wire': [],
   'recording-storage': ['h264', 'recording-parser', 'stream-session'],
   'stream-adapters': ['h264', 'media', 'playback', 'rtsp-parser', 'shared', 'stream-session'],
   'frame-extractor': ['shared', 'stream-adapters'],

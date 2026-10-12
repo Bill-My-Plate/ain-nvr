@@ -14,7 +14,6 @@ const packageEntrypoints = [
   'ain-nvr/recording-parser',
   'ain-nvr/recorded-stream-parser',
   'ain-nvr/playback',
-  'ain-nvr/playback-wire',
   'ain-nvr/frame-extractor',
   'ain-nvr/rtp-forwarder',
   'ain-nvr/rtsp-bridge',

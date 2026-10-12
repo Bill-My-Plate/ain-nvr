@@ -1,1 +1,0 @@
-export const PLAYBACK_PROTOCOL_VERSION = 1;

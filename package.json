@@ -54,9 +54,6 @@
       "playback": [
         "dist/cjs/exports/playback.d.ts"
       ],
-      "playback-wire": [
-        "dist/cjs/exports/playback-wire.d.ts"
-      ],
       "frame-extractor": [
         "dist/cjs/exports/frame-extractor.d.ts"
       ],
@@ -160,16 +157,6 @@
       "require": {
         "types": "./dist/cjs/exports/playback.d.ts",
         "default": "./dist/cjs/exports/playback.js"
-      }
-    },
-    "./playback-wire": {
-      "import": {
-        "types": "./dist/esm/exports/playback-wire.d.ts",
-        "default": "./dist/esm/exports/playback-wire.js"
-      },
-      "require": {
-        "types": "./dist/cjs/exports/playback-wire.d.ts",
-        "default": "./dist/cjs/exports/playback-wire.js"
       }
     },
     "./frame-extractor": {

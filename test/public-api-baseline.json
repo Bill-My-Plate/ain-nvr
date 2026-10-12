@@ -90,16 +90,6 @@
         "default": "./dist/cjs/exports/playback.js"
       }
     },
-    "./playback-wire": {
-      "import": {
-        "types": "./dist/esm/exports/playback-wire.d.ts",
-        "default": "./dist/esm/exports/playback-wire.js"
-      },
-      "require": {
-        "types": "./dist/cjs/exports/playback-wire.d.ts",
-        "default": "./dist/cjs/exports/playback-wire.js"
-      }
-    },
     "./frame-extractor": {
       "import": {
         "types": "./dist/esm/exports/frame-extractor.d.ts",
@@ -166,9 +156,6 @@
       ],
       "playback": [
         "dist/cjs/exports/playback.d.ts"
-      ],
-      "playback-wire": [
-        "dist/cjs/exports/playback-wire.d.ts"
       ],
       "frame-extractor": [
         "dist/cjs/exports/frame-extractor.d.ts"
@@ -249,16 +236,6 @@
       "createG711AccessUnit",
       "createPlaybackStream",
       "runIndependentPlaybackTracks"
-    ],
-    "ain-nvr/playback-wire": [
-      "ACCESS_UNIT_HEADER_BYTES",
-      "ACCESS_UNIT_MAGIC",
-      "DEFAULT_MAX_ACCESS_UNIT_BYTES",
-      "PLAYBACK_PROTOCOL_VERSION",
-      "PlaybackProtocolError",
-      "decodeAccessUnitMessage",
-      "encodeAccessUnitMessage",
-      "parseClientPlaybackMessage"
     ],
     "ain-nvr/frame-extractor": [
       "FrameSampler",

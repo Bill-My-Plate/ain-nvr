@@ -1,1 +1,0 @@
-export const ACCESS_UNIT_HEADER_BYTES = 36;

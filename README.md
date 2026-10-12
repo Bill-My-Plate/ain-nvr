@@ -134,7 +134,6 @@ Do not use a `linuxstatic` target because native addons require dynamic loading.
 | `ain-nvr/recording-parser` | Sequential recording pipeline and semantic index events |
 | `ain-nvr/recorded-stream-parser` | Parse stored RTSP-interleaved bytes through an abstract reader |
 | `ain-nvr/playback` | Resolve abstract segments and emit video/audio playback units |
-| `ain-nvr/playback-wire` | Optional browser control and binary message helpers |
 | `ain-nvr/frame-extractor` | URL or shared-session libav-to-JPEG extraction |
 | `ain-nvr/rtp-forwarder` | Bounded UDP forwarding building block |
 | `ain-nvr/rtsp-bridge` | Tokenized loopback RTSP bridges for live sessions and recorded playback |
@@ -302,8 +301,8 @@ stops at explicit recording gaps, reports configuration changes, and emits:
 Complete pending video frames and buffered startup audio are emitted before
 ending at a recording gap or session change. Incomplete frames remain excluded.
 
-The package does not create WebSockets or browser decoders. The application may
-use `ain-nvr/playback-wire` or translate messages to its existing protocol.
+The package does not create WebSockets or browser decoders. Applications
+choose their own playback transport and wire protocol.
 
 `PlaybackRtspBridge` adapts the same playback stream to a temporary RTSP/TCP
 URL for a local media process. It copies Annex-B H.264 into RTP and exposes
