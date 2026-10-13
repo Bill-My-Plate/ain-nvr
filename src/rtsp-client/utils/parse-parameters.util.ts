@@ -1,5 +1,4 @@
-
-
+/** Read case-insensitive authentication parameters and unescape quoted values. */
 export function parseParameters(value: string): Map<string, string> {
   const result = new Map<string, string>();
   const pattern = /([A-Za-z][A-Za-z0-9_-]*)\s*=\s*(?:"((?:\\.|[^"])*)"|([^,\s]+))/gu;

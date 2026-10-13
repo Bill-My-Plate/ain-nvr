@@ -1,17 +1,10 @@
-
-
-
-
-
-
-
-
-
-
 import { RtspClientError } from '../errors/rtsp-client-error.class.js';
 
+/** Read the session ID and optional timeout from a SETUP Session header. */
 export function parseSession(value: string | undefined): {
+  /** Opaque Session identifier returned by the camera. */
   sessionId: string;
+  /** Optional camera session timeout in seconds. */
   timeoutSeconds?: number;
 } {
   if (!value) {

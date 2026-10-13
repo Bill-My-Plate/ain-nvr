@@ -1,3 +1,4 @@
+import { DIGEST_AUTH_FORMAT } from '../constants/digest-auth-format.constant.js';
 import { randomBytes } from 'node:crypto';
 
 import type { RtspCredentials } from '../types/rtsp-credentials.interface.js';
@@ -6,13 +7,19 @@ import type { DigestAuthorizationState } from '../types/digest-authorization-sta
 import { quote } from './quote.util.js';
 import { md5 } from './md5.util.js';
 
+/** Build a Basic or MD5 Digest authorization header for a method and URL; return state for later Digest requests. */
 export function createRtspAuthorization(
   challenge: RtspAuthChallenge,
   credentials: RtspCredentials,
   method: string,
   uri: string,
   previous?: DigestAuthorizationState,
-): { header: string; state?: DigestAuthorizationState } {
+): {
+  /** Complete Authorization header value for this request. */
+  header: string;
+  /** Digest nonce state to reuse on the next request, when Digest is selected. */
+  state?: DigestAuthorizationState;
+} {
   if (challenge.scheme === 'Basic') {
     const encoded = Buffer.from(`${credentials.username}:${credentials.password}`, 'utf8')
       .toString('base64');
@@ -20,8 +27,9 @@ export function createRtspAuthorization(
   }
 
   const nonceCount = (previous?.nonceCount ?? 0) + 1;
-  const cnonce = previous?.cnonce ?? randomBytes(12).toString('hex');
-  const nc = nonceCount.toString(16).padStart(8, '0');
+  const cnonce = previous?.cnonce ?? randomBytes(DIGEST_AUTH_FORMAT.clientNonceBytes).toString('hex');
+  const nc = nonceCount.toString(DIGEST_AUTH_FORMAT.nonceCountRadix).padStart(DIGEST_AUTH_FORMAT.nonceCountWidth, '0');
+  // RFC Digest uses HA1 for credentials and HA2 for the request target.
   let ha1 = md5(`${credentials.username}:${challenge.realm}:${credentials.password}`);
   if (challenge.algorithm === 'MD5-sess') {
     ha1 = md5(`${ha1}:${challenge.nonce}:${cnonce}`);

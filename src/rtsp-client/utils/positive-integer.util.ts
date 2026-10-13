@@ -1,17 +1,7 @@
-
-
-
-
-
-
-
-
-
-
-export function positiveInteger(value: number | undefined, fallback: number, name: string): number {
-  const resolved = value ?? fallback;
-  if (!Number.isInteger(resolved) || resolved <= 0) {
+/** Require a positive integer and return the validated value. */
+export function positiveInteger(value: number, name: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
     throw new RangeError(`${name} must be a positive integer.`);
   }
-  return resolved;
+  return value;
 }
