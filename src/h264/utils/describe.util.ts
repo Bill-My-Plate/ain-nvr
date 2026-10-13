@@ -2,6 +2,7 @@ import { H264NalType } from '../types/h264-nal-type.enum.js';
 import type { H264Packetization } from '../types/h264-packetization.type.js';
 import type { H264PayloadInspection } from '../types/h264-payload-inspection.interface.js';
 
+/** Summarize inspected NALs and optional FU-A fragment details for callers. */
 export function describe(
   packetization: H264Packetization,
   nalTypes: number[],

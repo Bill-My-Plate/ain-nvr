@@ -1,0 +1,22 @@
+/** SPS header offsets, syntax values, and dimension conversion factors. */
+export const H264_SPS_LAYOUT = {
+  minimumNalBytes: 4,
+  profileIdcOffset: 1,
+  constraintFlagsOffset: 2,
+  levelIdcOffset: 3,
+  rbspOffset: 4,
+  defaultChromaFormatIdc: 1,
+  chroma420FormatIdc: 1,
+  chroma422FormatIdc: 2,
+  chroma444FormatIdc: 3,
+  maximumChromaFormatIdc: 3,
+  picOrderCountLsbType: 0,
+  picOrderCountDeltaType: 1,
+  maximumPicOrderCountType: 2,
+  chromaSubsamplingFactor: 2,
+  unsubsampledFactor: 1,
+  mapUnitsPerFrame: 2,
+  macroblockPixels: 16,
+  codecHexRadix: 16,
+  codecHexDigitsPerByte: 2,
+} as const;

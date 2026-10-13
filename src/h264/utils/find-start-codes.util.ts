@@ -2,17 +2,33 @@
 
 
 import type { StartCode } from '../types/start-code.type.js';
+import { H264_ANNEX_B_LAYOUT } from '../constants/h264-annex-b-layout.constant.js';
 
+/**
+ * Find the 00 00 01 and 00 00 00 01 delimiters in an Annex-B byte stream.
+ * Returns each delimiter's byte offset and length; NAL bytes follow it.
+ */
 export function findStartCodes(data: Buffer): StartCode[] {
   const result: StartCode[] = [];
-  for (let offset = 0; offset + 3 <= data.length;) {
-    if (data[offset] === 0 && data[offset + 1] === 0
-      && data[offset + 2] === 0 && data[offset + 3] === 1) {
-      result.push({ offset, length: 4 });
-      offset += 4;
-    } else if (data[offset] === 0 && data[offset + 1] === 0 && data[offset + 2] === 1) {
-      result.push({ offset, length: 3 });
-      offset += 3;
+  for (let offset = 0; offset + H264_ANNEX_B_LAYOUT.shortStartCodeBytes <= data.length;) {
+    const firstByteIsZero = data[offset + H264_ANNEX_B_LAYOUT.firstByteOffset]
+      === H264_ANNEX_B_LAYOUT.zeroByte;
+    const secondByteIsZero = data[offset + H264_ANNEX_B_LAYOUT.secondByteOffset]
+      === H264_ANNEX_B_LAYOUT.zeroByte;
+    const thirdByteIsZero = data[offset + H264_ANNEX_B_LAYOUT.shortMarkerOffset]
+      === H264_ANNEX_B_LAYOUT.zeroByte;
+    const thirdByteIsMarker = data[offset + H264_ANNEX_B_LAYOUT.shortMarkerOffset]
+      === H264_ANNEX_B_LAYOUT.markerByte;
+    const fourthByteIsMarker = data[offset + H264_ANNEX_B_LAYOUT.longMarkerOffset]
+      === H264_ANNEX_B_LAYOUT.markerByte;
+    const hasZeroPrefix = firstByteIsZero && secondByteIsZero;
+
+    if (hasZeroPrefix && thirdByteIsZero && fourthByteIsMarker) {
+      result.push({ offset, length: H264_ANNEX_B_LAYOUT.longStartCodeBytes });
+      offset += H264_ANNEX_B_LAYOUT.longStartCodeBytes;
+    } else if (hasZeroPrefix && thirdByteIsMarker) {
+      result.push({ offset, length: H264_ANNEX_B_LAYOUT.shortStartCodeBytes });
+      offset += H264_ANNEX_B_LAYOUT.shortStartCodeBytes;
     } else {
       offset += 1;
     }
