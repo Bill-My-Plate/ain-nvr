@@ -4,12 +4,12 @@ import { H264PayloadError } from '../errors/h264-payload-error.class.js';
 import { describe } from './describe.util.js';
 import { validateNalHeader } from './validate-nal-header.util.js';
 import { H264_NAL_LAYOUT } from '../constants/h264-nal-layout.constant.js';
-
 /**
  * Inspect the H.264 bytes after an RTP header. Accepts one complete NAL,
  * STAP-A (1-byte indicator followed by repeated 2-byte big-endian lengths and
  * NALs), or FU-A (1-byte indicator, 1-byte FU header, then fragment bytes).
  * The RTP header itself must already have been removed.
+ * @param payload One complete H.264 RTP payload. Byte zero is the NAL or aggregation/fragment indicator; STAP-A entries use two-byte big-endian NAL lengths, and FU-A uses a second fragment-header byte.
  */
 export function inspectH264Payload(payload: Buffer): H264PayloadInspection {
   if (payload.length === 0) {
@@ -38,8 +38,9 @@ export function inspectH264Payload(payload: Buffer): H264PayloadInspection {
         throw new H264PayloadError('STAP-A NAL length is invalid.');
       }
       const nal = payload.subarray(offset, offset + length);
-      validateNalHeader(nal[H264_NAL_LAYOUT.headerByteOffset]
-        ?? H264_NAL_LAYOUT.forbiddenZeroBitMask);
+      validateNalHeader(
+        nal[H264_NAL_LAYOUT.headerByteOffset] ?? H264_NAL_LAYOUT.forbiddenZeroBitMask,
+      );
       nalUnits.push(nal);
       nalTypes.push((nal[H264_NAL_LAYOUT.headerByteOffset] ?? 0) & H264_NAL_LAYOUT.typeMask);
       offset += length;

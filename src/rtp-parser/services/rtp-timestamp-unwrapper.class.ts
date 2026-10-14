@@ -1,7 +1,6 @@
 import { RTP_MODULUS } from '../constants/rtp-modulus.constant.js';
 import { RTP_HALF_MODULUS } from '../constants/rtp-half-modulus.constant.js';
 import { RTP_TIMESTAMP_MAX } from '../constants/rtp-timestamp-max.constant.js';
-
 /**
  * Extend wrapping 32-bit RTP timestamps into a bigint timeline.
  * Each change is interpreted as the shortest signed distance between timestamps;
@@ -10,7 +9,6 @@ import { RTP_TIMESTAMP_MAX } from '../constants/rtp-timestamp-max.constant.js';
 export class RtpTimestampUnwrapper {
   private lastRaw: number | undefined;
   private lastUnwrapped: bigint | undefined;
-
   /** Return an extended timestamp using the previous value to resolve wraparound. */
   public unwrap(timestamp: number): bigint {
     if (!Number.isInteger(timestamp) || timestamp < 0 || timestamp > RTP_TIMESTAMP_MAX) {

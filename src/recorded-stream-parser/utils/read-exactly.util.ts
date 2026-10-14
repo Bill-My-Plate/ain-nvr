@@ -1,12 +1,10 @@
-
-
-
-
 import { AinNvrError } from '../../shared/index.js';
 
 import type { RecordedByteSource } from '../types/recorded-byte-source.interface.js';
 import { RecordedStreamError } from '../errors/recorded-stream-error.class.js';
-
+/**
+ * Reads exactly the requested byte count without crossing the source safe boundary.
+ */
 export async function readExactly(
   source: RecordedByteSource,
   offset: number,

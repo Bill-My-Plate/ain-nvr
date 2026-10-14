@@ -1,7 +1,13 @@
+import { RECORDING_STORAGE_CONSTANTS } from '../constants/recording-storage-numeric-values.constant.js';
 import { mkdir, open, stat, statfs, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import type { H264CodecConfiguration } from '../../h264/index.js';
-import { serializeInterleavedFrame, type RecordingIndexEvent, type RecordingPacketWriter, type RecordingWriteRequest } from '../../recording-parser/index.js';
+import {
+  serializeInterleavedFrame,
+  type RecordingIndexEvent,
+  type RecordingPacketWriter,
+  type RecordingWriteRequest,
+} from '../../recording-parser/index.js';
 import type { ActiveRecordingSegment } from '../types/active-recording-segment.type.js';
 import type { PacketLocation } from '../types/packet-location.type.js';
 import type { RecordingSegmentWriterOptions } from '../types/recording-segment-writer-options.type.js';
@@ -10,11 +16,13 @@ import type { SessionMetadata } from '../types/session-metadata.type.js';
 import { RecordingFileUtil } from './recording-file-util.class.js';
 import { RecordingPathUtil } from './recording-path-util.class.js';
 import { RecordingSegmentWriterUtil } from './recording-segment-writer-util.class.js';
-
+/**
+ * Writes packet bytes and atomically publishes completed recording segments.
+ */
 export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocation> {
-  private DEFAULT_PLAYPOINT_INTERVAL_MS = 2_000;
-  private DEFAULT_MINIMUM_FREE_BYTES = 512 * 1024 * 1024;
-  private DISK_CHECK_INTERVAL_MS = 10_000;
+  private DEFAULT_PLAYPOINT_INTERVAL_MS = RECORDING_STORAGE_CONSTANTS.defaultPlaypointIntervalMs;
+  private DEFAULT_MINIMUM_FREE_BYTES = RECORDING_STORAGE_CONSTANTS.defaultMinimumFreeBytes;
+  private DISK_CHECK_INTERVAL_MS = RECORDING_STORAGE_CONSTANTS.defaultSegmentDurationMs;
   private playpointIntervalMs: number;
   private minimumFreeBytes: number;
   private sessionMetadata: SessionMetadata;
@@ -30,10 +38,10 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
   private pendingFinalization: ActiveRecordingSegment[] = [];
   private pendingClosedSessions: number[] = [];
   private closedHandles = new WeakSet<ActiveRecordingSegment>();
-
-  private constructor(
-    private options: RecordingSegmentWriterOptions,
-  ) {
+  /**
+   * Creates the instance and initializes its state.
+   */
+  private constructor(private options: RecordingSegmentWriterOptions) {
     this.playpointIntervalMs = RecordingSegmentWriterUtil.positiveInteger(
       options.playpointIntervalMs ?? this.DEFAULT_PLAYPOINT_INTERVAL_MS,
       'playpointIntervalMs',
@@ -42,23 +50,20 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
       options.minimumFreeBytes ?? this.DEFAULT_MINIMUM_FREE_BYTES,
       'minimumFreeBytes',
     );
-    RecordingSegmentWriterUtil.positiveInteger(
-      options.segmentDurationMs,
-      'segmentDurationMs',
-    );
+    RecordingSegmentWriterUtil.positiveInteger(options.segmentDurationMs, 'segmentDurationMs');
     this.currentSessionStartMs = options.sessionStartMs;
     this.currentSessionDirectory = RecordingPathUtil.resolveInsideRoot(
       options.cacheRoot,
       options.cameraId,
       String(options.sessionStartMs),
     );
-    this.currentSessionMetadataPath = path.join(
-      this.currentSessionDirectory,
-      'session.json',
-    );
+    this.currentSessionMetadataPath = path.join(this.currentSessionDirectory, 'session.json');
     this.sessionMetadata = this.createSessionMetadata(options.sessionStartMs);
   }
 
+  /**
+   * Creates a recording segment writer with validated storage settings.
+   */
   public static async create(
     options: RecordingSegmentWriterOptions,
   ): Promise<RecordingSegmentWriter> {
@@ -71,9 +76,10 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     return writer;
   }
 
-  public async write(
-    request: RecordingWriteRequest,
-  ): Promise<PacketLocation> {
+  /**
+   * Writes write.
+   */
+  public async write(request: RecordingWriteRequest): Promise<PacketLocation> {
     if (this.closed) throw new Error('Recording writer is closed.');
     await this.checkDiskSpace(request.packet.arrivalTimeMs);
 
@@ -90,20 +96,12 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
 
     const active =
       this.active ??
-      (await this.openSegment(
-        request.packet.arrivalTimeMs,
-        request.discontinuityBefore,
-      ));
+      (await this.openSegment(request.packet.arrivalTimeMs, request.discontinuityBefore));
     const bytes = serializeInterleavedFrame(request.packet);
     const byteOffset = active.bytes;
     let written = 0;
     while (written < bytes.length) {
-      const result = await active.handle.write(
-        bytes,
-        written,
-        bytes.length - written,
-        null,
-      );
+      const result = await active.handle.write(bytes, written, bytes.length - written, null);
       if (result.bytesWritten === 0) {
         throw new Error('Recording write made no progress.');
       }
@@ -114,9 +112,12 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     return { segment: active, byteOffset };
   }
 
-  public async applyEvents(
-    events: readonly RecordingIndexEvent<PacketLocation>[],
-  ): Promise<void> {
+  /**
+   * Applies index events to the segment that owns each packet location.
+   * Configuration and clock events update metadata before a segment is
+   * finalized, so the published index matches the written byte stream.
+   */
+  public async applyEvents(events: readonly RecordingIndexEvent<PacketLocation>[]): Promise<void> {
     for (const event of events) {
       if (event.type === 'configuration') {
         await this.updateConfiguration(event.trackId, event.configuration);
@@ -138,8 +139,7 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
           } as const;
           const existingIndex = segment.clockAnchors.findIndex(
             (candidate) =>
-              candidate.trackId === event.trackId &&
-              candidate.byteOffset === byteOffset,
+              candidate.trackId === event.trackId && candidate.byteOffset === byteOffset,
           );
           if (existingIndex < 0) segment.clockAnchors.push(anchor);
           else segment.clockAnchors[existingIndex] = anchor;
@@ -179,11 +179,17 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     }
   }
 
+  /**
+   * Stops active work and releases owned resources.
+   */
   public close(commit = true): Promise<void> {
     this.closePromise ??= this.closeInternal(commit);
     return this.closePromise;
   }
 
+  /**
+   * Close Internal.
+   */
   private async closeInternal(commit: boolean): Promise<void> {
     this.closed = true;
     const active = this.active;
@@ -193,10 +199,7 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     try {
       if (commit) {
         await this.completeBatch();
-        this.options.onSessionClosed(
-          this.options.cameraId,
-          this.currentSessionStartMs,
-        );
+        this.options.onSessionClosed(this.options.cameraId, this.currentSessionStartMs);
       }
     } catch (error) {
       failures.push(error);
@@ -212,13 +215,12 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
       this.pendingSessionMetadata = undefined;
       this.pendingClosedSessions = [];
     }
-    if (failures.length)
-      throw new AggregateError(
-        failures,
-        'Recording finalization failed.',
-      );
+    if (failures.length) throw new AggregateError(failures, 'Recording finalization failed.');
   }
 
+  /**
+   * Builds the session metadata published with committed segments.
+   */
   private createSessionMetadata(sessionStartMs: number): SessionMetadata {
     return {
       schemaVersion: 1,
@@ -234,6 +236,9 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     };
   }
 
+  /**
+   * Open Segment.
+   */
   private async openSegment(
     requestedStartMs: number,
     discontinuityBefore: boolean,
@@ -244,10 +249,7 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     );
     this.lastSegmentStartMs = startMs;
     const hourStartMs = RecordingPathUtil.nativeHourStart(startMs);
-    const directory = path.join(
-      this.currentSessionDirectory,
-      String(hourStartMs),
-    );
+    const directory = path.join(this.currentSessionDirectory, String(hourStartMs));
     await mkdir(directory, { recursive: true });
     const mediaPath = path.join(directory, `${startMs}.rtsp`);
     const partialMediaPath = `${mediaPath}.partial`;
@@ -259,7 +261,7 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
       partialMediaPath,
       mediaPath,
       metadataPath: path.join(directory, `${startMs}.json`),
-      handle: await open(partialMediaPath, 'wx', 0o600),
+      handle: await open(partialMediaPath, 'wx', RECORDING_STORAGE_CONSTANTS.privateFileMode),
       discontinuityBefore,
       clockAnchors: [],
       playpoints: [],
@@ -271,6 +273,9 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     return active;
   }
 
+  /**
+   * Finalize.
+   */
   private async finalize(segment: ActiveRecordingSegment): Promise<void> {
     const failures: unknown[] = [];
     try {
@@ -283,19 +288,12 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     } catch (error) {
       failures.push(error);
     }
-    if (failures.length)
-      throw new AggregateError(
-        failures,
-        'Recording file sync/close failed.',
-      );
+    if (failures.length) throw new AggregateError(failures, 'Recording file sync/close failed.');
     if (segment.bytes === 0) {
       await unlink(segment.partialMediaPath);
       return;
     }
-    await RecordingFileUtil.publishFileAtomic(
-      segment.partialMediaPath,
-      segment.mediaPath,
-    );
+    await RecordingFileUtil.publishFileAtomic(segment.partialMediaPath, segment.mediaPath);
     const metadata: SegmentMetadata = {
       schemaVersion: 1,
       cameraId: this.options.cameraId,
@@ -311,10 +309,7 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
       playpoints: segment.playpoints,
       keyframes: segment.keyframes,
     };
-    await RecordingFileUtil.writeJsonAtomic(
-      segment.metadataPath,
-      metadata,
-    );
+    await RecordingFileUtil.writeJsonAtomic(segment.metadataPath, metadata);
     this.options.onCommitted({
       cameraId: this.options.cameraId,
       sessionStartMs: segment.sessionStartMs,
@@ -326,27 +321,26 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     });
   }
 
-  private async closeHandle(
-    segment: ActiveRecordingSegment,
-  ): Promise<void> {
+  /**
+   * Close Handle.
+   */
+  private async closeHandle(segment: ActiveRecordingSegment): Promise<void> {
     if (this.closedHandles.has(segment)) return;
     this.closedHandles.add(segment);
     await segment.handle.close();
   }
 
+  /**
+   * Update Configuration.
+   */
   private async updateConfiguration(
     trackId: string,
     configuration: H264CodecConfiguration,
   ): Promise<void> {
     const sps = configuration.sps.toString('base64');
     const pps = configuration.pps.toString('base64');
-    const current = this.sessionMetadata.tracks.find(
-      (track) => track.trackId === trackId,
-    );
-    if (
-      current?.parameterSetsBase64?.sps === sps &&
-      current.parameterSetsBase64.pps === pps
-    ) {
+    const current = this.sessionMetadata.tracks.find((track) => track.trackId === trackId);
+    if (current?.parameterSetsBase64?.sps === sps && current.parameterSetsBase64.pps === pps) {
       return;
     }
     const updated: SessionMetadata = {
@@ -367,41 +361,35 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
       return;
     }
     this.sessionMetadata = updated;
-    await RecordingFileUtil.writeJsonAtomic(
-      this.currentSessionMetadataPath,
-      this.sessionMetadata,
-    );
+    await RecordingFileUtil.writeJsonAtomic(this.currentSessionMetadataPath, this.sessionMetadata);
   }
 
+  /**
+   * Begin Configuration Session.
+   */
   private async beginConfigurationSession(startMs: number): Promise<void> {
     const pending = this.pendingSessionMetadata;
     if (pending === undefined) return;
     this.pendingSessionMetadata = undefined;
-    this.currentSessionStartMs = Math.max(
-      startMs,
-      this.currentSessionStartMs + 1,
-    );
+    this.currentSessionStartMs = Math.max(startMs, this.currentSessionStartMs + 1);
     this.currentSessionDirectory = RecordingPathUtil.resolveInsideRoot(
       this.options.cacheRoot,
       this.options.cameraId,
       String(this.currentSessionStartMs),
     );
-    this.currentSessionMetadataPath = path.join(
-      this.currentSessionDirectory,
-      'session.json',
-    );
+    this.currentSessionMetadataPath = path.join(this.currentSessionDirectory, 'session.json');
     this.sessionMetadata = {
       ...pending,
       sessionStartMs: this.currentSessionStartMs,
       createdAt: new Date(this.currentSessionStartMs).toISOString(),
     };
     await this.reserveSessionDirectory();
-    await RecordingFileUtil.writeJsonAtomic(
-      this.currentSessionMetadataPath,
-      this.sessionMetadata,
-    );
+    await RecordingFileUtil.writeJsonAtomic(this.currentSessionMetadataPath, this.sessionMetadata);
   }
 
+  /**
+   * Reserve Session Directory.
+   */
   private async reserveSessionDirectory(): Promise<void> {
     const cameraDirectory = RecordingPathUtil.resolveInsideRoot(
       this.options.cacheRoot,
@@ -422,37 +410,21 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
           this.currentSessionStartMs++;
           continue;
         } catch (error) {
-          if (
-            !error ||
-            typeof error !== 'object' ||
-            !('code' in error) ||
-            error.code !== 'ENOENT'
-          )
+          if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT')
             throw error;
         }
       }
-      this.currentSessionDirectory = path.join(
-        cameraDirectory,
-        String(this.currentSessionStartMs),
-      );
+      this.currentSessionDirectory = path.join(cameraDirectory, String(this.currentSessionStartMs));
       try {
         await mkdir(this.currentSessionDirectory);
         break;
       } catch (error) {
-        if (
-          !error ||
-          typeof error !== 'object' ||
-          !('code' in error) ||
-          error.code !== 'EEXIST'
-        )
+        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'EEXIST')
           throw error;
         this.currentSessionStartMs++;
       }
     }
-    this.currentSessionMetadataPath = path.join(
-      this.currentSessionDirectory,
-      'session.json',
-    );
+    this.currentSessionMetadataPath = path.join(this.currentSessionDirectory, 'session.json');
     this.sessionMetadata = {
       ...this.sessionMetadata,
       sessionStartMs: this.currentSessionStartMs,
@@ -460,9 +432,11 @@ export class RecordingSegmentWriter implements RecordingPacketWriter<PacketLocat
     };
   }
 
+  /**
+   * Check Disk Space.
+   */
   private async checkDiskSpace(arrivalTimeMs: number): Promise<void> {
-    if (arrivalTimeMs - this.lastDiskCheckMs < this.DISK_CHECK_INTERVAL_MS)
-      return;
+    if (arrivalTimeMs - this.lastDiskCheckMs < this.DISK_CHECK_INTERVAL_MS) return;
     this.lastDiskCheckMs = arrivalTimeMs;
     const stats = await statfs(this.options.cacheRoot);
     const freeBytes = stats.bavail * stats.bsize;

@@ -1,28 +1,22 @@
-
-
-
-
-
-
-
-
-
-
-
-
 import type { RtspSessionManagerOptions } from '../types/rtsp-session-manager-options.interface.js';
 import type { RtspSessionLease } from '../types/rtsp-session-lease.interface.js';
 import { RtspStreamSession } from './rtsp-stream-session.class.js';
 import type { ManagedSession } from '../types/managed-session.type.js';
-
+/** Shares one reconnecting camera session per exact URL through reference-counted leases. */
 export class RtspSessionManager {
   private readonly sessions = new Map<string, ManagedSession>();
   private stopped = false;
   private stopPromise: Promise<void> | undefined;
+  /** Stores defaults passed to each new stream session. */
+  public constructor(private readonly options: RtspSessionManagerOptions = {}) {}
 
-  constructor(private readonly options: RtspSessionManagerOptions = {}) {}
-
-  async acquire(input: { readonly url: string; readonly signal?: AbortSignal }): Promise<RtspSessionLease> {
+  /** Waits for streaming and returns a lease that releases only this caller's reference. */
+  public async acquire(input: {
+    /** RTSP URL used by this operation. */
+    readonly url: string;
+    /** Abort signal used to cancel the operation. */
+    readonly signal?: AbortSignal;
+  }): Promise<RtspSessionLease> {
     if (this.stopped) throw new Error('RTSP session manager stopped.');
     if (input.signal?.aborted) throw input.signal.reason;
     const key = input.url;
@@ -43,6 +37,8 @@ export class RtspSessionManager {
       managed = { session, leases: 0 };
       this.sessions.set(key, managed);
     }
+    // Count the pending caller before waiting so another caller cannot close
+    // the shared session while this acquisition is still in progress.
     managed.leases += 1;
     try {
       // Each caller waits independently. Only the final reference stops the session.
@@ -64,23 +60,31 @@ export class RtspSessionManager {
     };
   }
 
-  get activeSessionCount(): number {
+  /** Number of currently managed camera URLs, including connections in progress. */
+  public get activeSessionCount(): number {
     return this.sessions.size;
   }
 
-  async stop(): Promise<void> {
+  /** Stops every managed session and reports all shutdown failures together. */
+  public async stop(): Promise<void> {
     if (this.stopPromise !== undefined) return this.stopPromise;
     this.stopped = true;
     const sessions = [...this.sessions.values()];
     this.sessions.clear();
-    this.stopPromise = Promise.allSettled(sessions.map(async (managed) => managed.session.stop()))
-      .then((results) => {
-        const failures = results.filter((result) => result.status === 'rejected');
-        if (failures.length) throw new AggregateError(failures.map((result) => result.reason), 'RTSP shutdown failed.');
-      });
+    this.stopPromise = Promise.allSettled(
+      sessions.map(async (managed) => managed.session.stop()),
+    ).then((results) => {
+      const failures = results.filter((result) => result.status === 'rejected');
+      if (failures.length)
+        throw new AggregateError(
+          failures.map((result) => result.reason),
+          'RTSP shutdown failed.',
+        );
+    });
     return this.stopPromise;
   }
 
+  /** Closes a shared session only when its final lease has been released. */
   private async release(key: string, managed: ManagedSession): Promise<void> {
     managed.leases = Math.max(0, managed.leases - 1);
     if (managed.leases !== 0 || this.sessions.get(key) !== managed) return;

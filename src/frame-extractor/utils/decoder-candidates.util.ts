@@ -1,11 +1,8 @@
-
-
-
-
-
 import type { DecoderCandidate } from '../types/decoder-candidate.interface.js';
 import type { DecoderHostCapabilities } from '../types/decoder-host-capabilities.interface.js';
-
+/**
+ * Orders hardware and software decoder candidates for this host.
+ */
 export function decoderCandidates(
   capabilities: DecoderHostCapabilities,
 ): readonly DecoderCandidate[] {

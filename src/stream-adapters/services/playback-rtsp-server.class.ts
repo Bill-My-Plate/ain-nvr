@@ -1,6 +1,6 @@
+import { STREAM_ADAPTER_CONSTANTS } from '../constants/stream-adapters-numeric-values.constant.js';
 import { randomBytes } from 'node:crypto';
 import net, { type Server, type Socket } from 'node:net';
-
 
 import { type RtspMessage } from '../../rtsp-parser/index.js';
 import { RtspParser } from '../../rtsp-parser/index.js';
@@ -10,10 +10,12 @@ import type { PlaybackRtspServerOptions } from '../types/playback-rtsp-server-op
 import { DEFAULT_MAXIMUM_QUEUED_BYTES } from '../constants/default-maximum-queued-bytes.constant.js';
 import { parseChannels } from '../utils/parse-channels.util.js';
 import { interleavedFrame } from '../utils/playback-rtsp-server-interleaved-frame.util.js';
-
+/**
+ * Accepts a local RTSP client and sends packetized playback over interleaved TCP.
+ */
 export class PlaybackRtspServer {
   private readonly server: Server;
-  private readonly token = randomBytes(16).toString('hex');
+  private readonly token = randomBytes(STREAM_ADAPTER_CONSTANTS.playbackTokenBytes).toString('hex');
   private readonly maximumQueuedBytes: number;
   private client: ClientState | undefined;
   private urlValue: string | undefined;
@@ -21,14 +23,18 @@ export class PlaybackRtspServer {
   private playReject: ((error: Error) => void) | undefined;
   private readonly playPromise: Promise<void>;
   private stopped = false;
-
-  constructor(private readonly options: PlaybackRtspServerOptions) {
+  /**
+   * Creates the instance and initializes its state.
+   */
+  public constructor(private readonly options: PlaybackRtspServerOptions) {
     this.maximumQueuedBytes = options.maximumQueuedBytes ?? DEFAULT_MAXIMUM_QUEUED_BYTES;
     if (!Number.isSafeInteger(this.maximumQueuedBytes) || this.maximumQueuedBytes <= 0) {
       throw new RangeError('maximumQueuedBytes must be a positive safe integer.');
     }
-    if (options.audioSampleRate !== undefined
-      && (!Number.isSafeInteger(options.audioSampleRate) || options.audioSampleRate <= 0)) {
+    if (
+      options.audioSampleRate !== undefined &&
+      (!Number.isSafeInteger(options.audioSampleRate) || options.audioSampleRate <= 0)
+    ) {
       throw new RangeError('audioSampleRate must be a positive safe integer.');
     }
     this.playPromise = new Promise<void>((resolve, reject) => {
@@ -42,11 +48,17 @@ export class PlaybackRtspServer {
     });
   }
 
-  get url(): string | undefined {
+  /**
+   * Returns the local RTSP URL after startup.
+   */
+  public get url(): string | undefined {
     return this.urlValue;
   }
 
-  async start(): Promise<string> {
+  /**
+   * Starts the operation and initializes its resources.
+   */
+  public async start(): Promise<string> {
     if (this.stopped) throw new Error('Playback RTSP server is stopped.');
     await new Promise<void>((resolve, reject) => {
       const onError = (error: Error): void => reject(error);
@@ -64,7 +76,13 @@ export class PlaybackRtspServer {
     return this.urlValue;
   }
 
-  async waitForPlay(signal?: AbortSignal, timeoutMs = 15_000): Promise<void> {
+  /**
+   * Wait For Play.
+   */
+  public async waitForPlay(
+    signal?: AbortSignal,
+    timeoutMs: number = STREAM_ADAPTER_CONSTANTS.defaultPlayTimeoutMs,
+  ): Promise<void> {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
       throw new RangeError('timeoutMs must be a positive safe integer.');
     }
@@ -78,35 +96,53 @@ export class PlaybackRtspServer {
         timeout.unref();
         const abort = (): void => {
           clearTimeout(timeout);
-          reject(signal?.reason instanceof Error
-            ? signal.reason
-            : new Error('Playback RTSP bridge aborted.'));
+          reject(
+            signal?.reason instanceof Error
+              ? signal.reason
+              : new Error('Playback RTSP bridge aborted.'),
+          );
         };
         if (signal?.aborted === true) abort();
         else signal?.addEventListener('abort', abort, { once: true });
-        this.playPromise.finally(() => {
-          clearTimeout(timeout);
-          signal?.removeEventListener('abort', abort);
-        }).catch(() => undefined);
+        this.playPromise
+          .finally(() => {
+            clearTimeout(timeout);
+            signal?.removeEventListener('abort', abort);
+          })
+          .catch(() => undefined);
       }),
     ]);
   }
 
-  async sendVideo(packet: Buffer): Promise<void> {
+  /**
+   * Sends video.
+   * @param packet A complete variable-length RTP or RTCP packet. RTP starts with a 12-byte fixed header; RTCP starts with a four-byte common header. RTSP interleaved framing, when used, adds four bytes.
+   */
+  public async sendVideo(packet: Buffer): Promise<void> {
     await this.sendPacket(0, packet);
   }
 
-  async sendAudio(packet: Buffer): Promise<void> {
+  /**
+   * Sends audio.
+   * @param packet A complete variable-length RTP or RTCP packet. RTP starts with a 12-byte fixed header; RTCP starts with a four-byte common header. RTSP interleaved framing, when used, adds four bytes.
+   */
+  public async sendAudio(packet: Buffer): Promise<void> {
     await this.sendPacket(1, packet);
   }
 
-  async finish(): Promise<void> {
+  /**
+   * Ends media delivery to the connected RTSP client.
+   */
+  public async finish(): Promise<void> {
     const socket = this.client?.socket;
     if (socket === undefined || socket.destroyed) return;
     await new Promise<void>((resolve) => socket.end(resolve));
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Stops active work and releases owned resources.
+   */
+  public async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
     this.playReject?.(new Error('Playback RTSP server stopped before playback.'));
@@ -120,6 +156,9 @@ export class PlaybackRtspServer {
     this.urlValue = undefined;
   }
 
+  /**
+   * Accept.
+   */
   private accept(socket: Socket): void {
     if (this.client !== undefined) {
       socket.destroy();
@@ -129,7 +168,7 @@ export class PlaybackRtspServer {
     const client: ClientState = {
       socket,
       parser: new RtspParser(),
-      sessionId: randomBytes(8).toString('hex'),
+      sessionId: randomBytes(STREAM_ADAPTER_CONSTANTS.playbackSessionIdBytes).toString('hex'),
       channels: new Map(),
       playing: false,
     };
@@ -146,6 +185,10 @@ export class PlaybackRtspServer {
     });
   }
 
+  /**
+   * Receive.
+   * @param chunk A complete variable-length RTP or RTCP packet. RTP starts with a 12-byte fixed header; RTCP starts with a four-byte common header. RTSP interleaved framing, when used, adds four bytes.
+   */
   private receive(client: ClientState, chunk: Buffer): void {
     try {
       for (const item of client.parser.push(chunk)) {
@@ -156,48 +199,67 @@ export class PlaybackRtspServer {
     }
   }
 
+  /**
+   * Serves the local RTSP handshake: DESCRIBE advertises tracks, SETUP stores
+   * channel pairs, and PLAY releases the playback sender.
+   */
   private handleRequest(client: ClientState, request: RtspMessage): void {
     if (request.startLine.type !== 'request') {
-      this.respond(client, request, 400, 'Bad Request');
+      this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspBadRequest, 'Bad Request');
       return;
     }
     const method = request.startLine.method.toUpperCase();
     if (!this.validUri(request.startLine.uri, method)) {
-      this.respond(client, request, 404, 'Not Found');
+      this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspNotFound, 'Not Found');
       return;
     }
 
     switch (method) {
       case 'OPTIONS':
-        this.respond(client, request, 200, 'OK', {
+        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
           Public: 'OPTIONS, DESCRIBE, SETUP, PLAY, GET_PARAMETER, TEARDOWN',
         });
         return;
       case 'DESCRIBE': {
         const body = Buffer.from(this.createSdp(), 'utf8');
-        this.respond(client, request, 200, 'OK', {
-          'Content-Type': 'application/sdp',
-          'Content-Base': `${this.urlValue as string}/`,
-        }, body);
+        this.respond(
+          client,
+          request,
+          STREAM_ADAPTER_CONSTANTS.rtspOk,
+          'OK',
+          {
+            'Content-Type': 'application/sdp',
+            'Content-Base': `${this.urlValue as string}/`,
+          },
+          body,
+        );
         return;
       }
       case 'SETUP': {
         const track = this.trackFromUri(request.startLine.uri);
         const channels = parseChannels(request.headers.get('transport'));
-        if (track === undefined || channels === undefined
-          || (track === 1 && this.options.audioSampleRate === undefined)) {
-          this.respond(client, request, 461, 'Unsupported Transport');
+        if (
+          track === undefined ||
+          channels === undefined ||
+          (track === 1 && this.options.audioSampleRate === undefined)
+        ) {
+          this.respond(
+            client,
+            request,
+            STREAM_ADAPTER_CONSTANTS.rtspUnsupportedTransport,
+            'Unsupported Transport',
+          );
           return;
         }
         client.channels.set(track, channels);
-        this.respond(client, request, 200, 'OK', {
+        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
           Session: `${client.sessionId};timeout=60`,
           Transport: `RTP/AVP/TCP;unicast;interleaved=${channels.rtp}-${channels.rtcp}`,
         });
         return;
       }
       case 'PLAY':
-        this.respond(client, request, 200, 'OK', {
+        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
           Session: client.sessionId,
           Range: 'npt=0.000-',
           'RTP-Info': this.createRtpInfo(client),
@@ -208,17 +270,29 @@ export class PlaybackRtspServer {
         this.playReject = undefined;
         return;
       case 'GET_PARAMETER':
-        this.respond(client, request, 200, 'OK', { Session: client.sessionId });
+        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
+          Session: client.sessionId,
+        });
         return;
       case 'TEARDOWN':
-        this.respond(client, request, 200, 'OK', { Session: client.sessionId });
+        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
+          Session: client.sessionId,
+        });
         client.socket.end();
         return;
       default:
-        this.respond(client, request, 405, 'Method Not Allowed');
+        this.respond(
+          client,
+          request,
+          STREAM_ADAPTER_CONSTANTS.rtspMethodNotAllowed,
+          'Method Not Allowed',
+        );
     }
   }
 
+  /**
+   * Respond.
+   */
   private respond(
     client: ClientState,
     request: RtspMessage,
@@ -241,22 +315,33 @@ export class PlaybackRtspServer {
     };
     const header = Buffer.from(
       `RTSP/1.0 ${status} ${statusText}\r\n${Object.entries(responseHeaders)
-        .map(([name, value]) => `${name}: ${value}\r\n`).join('')}\r\n`,
+        .map(([name, value]) => `${name}: ${value}\r\n`)
+        .join('')}\r\n`,
       'ascii',
     );
     client.socket.write(body.length === 0 ? header : Buffer.concat([header, body]));
   }
 
+  /**
+   * Builds the RTP-Info header for the negotiated playback tracks.
+   */
   private createRtpInfo(client: ClientState): string {
     // Both timestamps describe the same npt=0 instant, not each track's first
     // packet. Otherwise the client independently rebases delayed audio to zero.
-    return [...client.channels.keys()].flatMap((track) => {
-      const info = track === 0 ? this.options.videoRtpInfo : this.options.audioRtpInfo;
-      if (info === undefined) return [];
-      return [`url=${this.urlValue as string}/trackID=${track};seq=${info.initialSequenceNumber};rtptime=${info.initialTimestamp}`];
-    }).join(',');
+    return [...client.channels.keys()]
+      .flatMap((track) => {
+        const info = track === 0 ? this.options.videoRtpInfo : this.options.audioRtpInfo;
+        if (info === undefined) return [];
+        return [
+          `url=${this.urlValue as string}/trackID=${track};seq=${info.initialSequenceNumber};rtptime=${info.initialTimestamp}`,
+        ];
+      })
+      .join(',');
   }
 
+  /**
+   * Builds the SDP description advertised to an RTSP client.
+   */
   private createSdp(): string {
     const configuration = this.options.configuration;
     const lines = [
@@ -269,7 +354,7 @@ export class PlaybackRtspServer {
       'a=range:npt=0-',
       'm=video 0 RTP/AVP 96',
       'a=rtpmap:96 H264/90000',
-      `a=fmtp:96 packetization-mode=1;profile-level-id=${configuration.decoder.codec.slice(5)};sprop-parameter-sets=${configuration.sps.toString('base64')},${configuration.pps.toString('base64')}`,
+      `a=fmtp:96 packetization-mode=1;profile-level-id=${configuration.decoder.codec.slice(STREAM_ADAPTER_CONSTANTS.h264CodecPrefixLength)};sprop-parameter-sets=${configuration.sps.toString('base64')},${configuration.pps.toString('base64')}`,
       'a=control:trackID=0',
       'a=sendonly',
     ];
@@ -285,21 +370,29 @@ export class PlaybackRtspServer {
     return lines.join('\r\n');
   }
 
+  /**
+   * Valid Uri.
+   */
   private validUri(uri: string, method: string): boolean {
     if (method === 'OPTIONS' && uri === '*') return true;
     try {
       const parsed = new URL(uri);
-      return parsed.protocol === 'rtsp:'
-        && parsed.hostname === '127.0.0.1'
-        && (parsed.pathname === `/${this.token}`
-          || parsed.pathname === `/${this.token}/`
-          || parsed.pathname === `/${this.token}/trackID=0`
-          || parsed.pathname === `/${this.token}/trackID=1`);
+      return (
+        parsed.protocol === 'rtsp:' &&
+        parsed.hostname === '127.0.0.1' &&
+        (parsed.pathname === `/${this.token}` ||
+          parsed.pathname === `/${this.token}/` ||
+          parsed.pathname === `/${this.token}/trackID=0` ||
+          parsed.pathname === `/${this.token}/trackID=1`)
+      );
     } catch {
       return false;
     }
   }
 
+  /**
+   * Track From Uri.
+   */
   private trackFromUri(uri: string): 0 | 1 | undefined {
     try {
       const pathname = new URL(uri).pathname;
@@ -311,11 +404,19 @@ export class PlaybackRtspServer {
     return undefined;
   }
 
+  /**
+   * Sends packet.
+   * @param packet A complete variable-length RTP or RTCP packet. RTP starts with a 12-byte fixed header; RTCP starts with a four-byte common header. RTSP interleaved framing, when used, adds four bytes.
+   */
   private async sendPacket(track: 0 | 1, packet: Buffer): Promise<void> {
     const client = this.client;
     const channel = client?.channels.get(track)?.rtp;
-    if (client === undefined || channel === undefined || !client.playing
-      || client.socket.destroyed) {
+    if (
+      client === undefined ||
+      channel === undefined ||
+      !client.playing ||
+      client.socket.destroyed
+    ) {
       throw new Error('Playback RTSP client is not ready for media.');
     }
     const frame = interleavedFrame(channel, packet);

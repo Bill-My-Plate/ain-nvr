@@ -1,3 +1,4 @@
+import { PLAYBACK_CONSTANTS } from '../constants/playback-numeric-values.constant.js';
 import type { H264CodecConfiguration } from '../../h264/index.js';
 
 import { RecordedRtspParser } from '../../recorded-stream-parser/index.js';
@@ -9,16 +10,27 @@ import type { PlaybackMessage } from '../types/playback-message.type.js';
 import type { PlaybackOptions } from '../types/playback-options.interface.js';
 import { PlaybackMediaError } from '../errors/playback-media-error.class.js';
 import { sameConfiguration } from './same-configuration.util.js';
-
+/**
+ * Reads recorded segments and yields timed video/audio playback messages.
+ * It waits for an H.264 keyframe and codec configuration before announcing
+ * readiness, then carries audio and configuration changes across segments.
+ */
 export async function* createPlaybackStream<TSegmentRef>(
   options: PlaybackOptions<TSegmentRef>,
 ): AsyncGenerator<PlaybackMessage> {
-  const maximumGapMs = options.maximumGapMs ?? 5_000;
-  const maximumBootstrapBytes = options.maximumBootstrapBytes ?? 64 * 1024 * 1024;
-  const maximumBootstrapDurationMs = options.maximumBootstrapDurationMs ?? 30_000;
-  if (!Number.isSafeInteger(maximumGapMs) || maximumGapMs < 0
-    || !Number.isSafeInteger(maximumBootstrapBytes) || maximumBootstrapBytes <= 0
-    || !Number.isSafeInteger(maximumBootstrapDurationMs) || maximumBootstrapDurationMs <= 0) {
+  const maximumGapMs = options.maximumGapMs ?? PLAYBACK_CONSTANTS.defaultMaximumGapMs;
+  const maximumBootstrapBytes =
+    options.maximumBootstrapBytes ?? PLAYBACK_CONSTANTS.defaultMaximumBootstrapBytes;
+  const maximumBootstrapDurationMs =
+    options.maximumBootstrapDurationMs ?? PLAYBACK_CONSTANTS.defaultMaximumBootstrapDurationMs;
+  if (
+    !Number.isSafeInteger(maximumGapMs) ||
+    maximumGapMs < 0 ||
+    !Number.isSafeInteger(maximumBootstrapBytes) ||
+    maximumBootstrapBytes <= 0 ||
+    !Number.isSafeInteger(maximumBootstrapDurationMs) ||
+    maximumBootstrapDurationMs <= 0
+  ) {
     throw new RangeError('Playback limits are invalid.');
   }
   if (options.signal?.aborted) throw options.signal.reason;
@@ -30,7 +42,9 @@ export async function* createPlaybackStream<TSegmentRef>(
   );
   let segment = start.segment;
   let byteOffset = start.byteOffset;
-  const video = segment.tracks.find((track) => track.mediaType === 'video' && track.codec === 'h264');
+  const video = segment.tracks.find(
+    (track) => track.mediaType === 'video' && track.codec === 'h264',
+  );
   if (video === undefined) {
     throw new PlaybackMediaError('unsupported_codec', 'Playback source has no H.264 video track.');
   }
@@ -62,8 +76,11 @@ export async function* createPlaybackStream<TSegmentRef>(
         actualStartTimeMs: start.actualStartTimeMs,
         configuration,
       });
-    } else if (unit.type === 'key' && unit.configuration !== undefined
-      && !sameConfiguration(activeConfiguration, unit.configuration)) {
+    } else if (
+      unit.type === 'key' &&
+      unit.configuration !== undefined &&
+      !sameConfiguration(activeConfiguration, unit.configuration)
+    ) {
       activeConfiguration = unit.configuration;
       messages.push({
         kind: 'configuration',
@@ -80,18 +97,21 @@ export async function* createPlaybackStream<TSegmentRef>(
       if (options.signal?.aborted) throw options.signal.reason;
       bootstrapBytes += ready ? 0 : packet.frame.rawHeader.length + packet.frame.payload.length;
       lastBootstrapTimeMs = Math.max(lastBootstrapTimeMs, packet.wallClockTimeMs);
-      if (!ready && (bootstrapBytes > maximumBootstrapBytes
-        || lastBootstrapTimeMs - start.actualStartTimeMs > maximumBootstrapDurationMs)) {
+      if (
+        !ready &&
+        (bootstrapBytes > maximumBootstrapBytes ||
+          lastBootstrapTimeMs - start.actualStartTimeMs > maximumBootstrapDurationMs)
+      ) {
         const configuration = assembler.configuration;
         throw configuration === undefined
           ? new PlaybackMediaError(
-            'no_decoder_configuration',
-            'No valid H.264 SPS/PPS was found within the playback bootstrap limit.',
-          )
+              'no_decoder_configuration',
+              'No valid H.264 SPS/PPS was found within the playback bootstrap limit.',
+            )
           : new PlaybackMediaError(
-            'no_sync_frame',
-            'No complete H.264 IDR was found within the playback bootstrap limit.',
-          );
+              'no_sync_frame',
+              'No complete H.264 IDR was found within the playback bootstrap limit.',
+            );
       }
 
       if (packet.track?.mediaType === 'video' && packet.rtp !== undefined) {
@@ -118,7 +138,8 @@ export async function* createPlaybackStream<TSegmentRef>(
           if (ready) yield audio;
           else {
             pendingAudio.push(audio);
-            if (pendingAudio.length > 512) pendingAudio.shift();
+            if (pendingAudio.length > PLAYBACK_CONSTANTS.maximumPendingAudioUnits)
+              pendingAudio.shift();
           }
         }
       }
@@ -128,8 +149,11 @@ export async function* createPlaybackStream<TSegmentRef>(
     // A terminating boundary cannot supply the next timestamp that normally
     // releases the pending access unit. Flush it exactly as at recording EOF.
     // Continuous segments may split a FU-A, so never flush between those.
-    if (next === undefined || next.sessionId !== segment.sessionId
-      || next.startTimeMs - segment.endTimeMs > maximumGapMs) {
+    if (
+      next === undefined ||
+      next.sessionId !== segment.sessionId ||
+      next.startTimeMs - segment.endTimeMs > maximumGapMs
+    ) {
       for (const unit of assembler.flush()) {
         const wasReady = ready;
         for (const message of consumeVideoUnit(unit)) yield message;
@@ -142,15 +166,15 @@ export async function* createPlaybackStream<TSegmentRef>(
       if (!ready) {
         throw assembler.configuration === undefined
           ? new PlaybackMediaError(
-            'no_decoder_configuration',
-            'Recording ended before a valid H.264 decoder configuration was found.',
-          )
+              'no_decoder_configuration',
+              'Recording ended before a valid H.264 decoder configuration was found.',
+            )
           : new PlaybackMediaError(
-            'no_sync_frame',
-            sawVideoPacket
-              ? 'Recording ended before a complete H.264 IDR was found.'
-              : 'Recording contains no H.264 packets.',
-          );
+              'no_sync_frame',
+              sawVideoPacket
+                ? 'Recording ended before a complete H.264 IDR was found.'
+                : 'Recording contains no H.264 packets.',
+            );
       }
       yield { kind: 'end', reason: 'end-of-recording' };
       return;

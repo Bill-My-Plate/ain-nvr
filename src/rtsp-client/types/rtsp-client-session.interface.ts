@@ -2,7 +2,6 @@ import { type SdpDescription } from '../../rtsp-parser/index.js';
 
 import type { RtspVideoTrack } from './rtsp-video-track.interface.js';
 import type { RtspAudioTrack } from './rtsp-audio-track.interface.js';
-
 /** SDP and tracks returned after a successful PLAY. */
 export interface RtspClientSession {
   /** Original SDP text received from DESCRIBE. */
@@ -11,10 +10,10 @@ export interface RtspClientSession {
   readonly description: SdpDescription;
   /** Required negotiated H.264 track. */
   readonly video: RtspVideoTrack;
-  /** Optional negotiated G.711 track. */
+  /** Negotiated audio track, when the RTSP session has one. */
   readonly audio?: RtspAudioTrack;
   /** Session identifier returned by SETUP. */
   readonly sessionId: string;
-  /** Optional camera session timeout in seconds. */
+  /** RTSP session timeout advertised by the camera, in seconds. */
   readonly sessionTimeoutSeconds?: number;
 }

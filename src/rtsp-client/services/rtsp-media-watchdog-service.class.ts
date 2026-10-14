@@ -1,15 +1,13 @@
-import type { Socket } from "node:net";
-import { RTSP_CLIENT_DEFAULTS } from "../constants/rtsp-client-defaults.constant.js";
-import { RtspClientError } from "../errors/rtsp-client-error.class.js";
-
+import type { Socket } from 'node:net';
+import { RTSP_CLIENT_DEFAULTS } from '../constants/rtsp-client-defaults.constant.js';
+import { RtspClientError } from '../errors/rtsp-client-error.class.js';
 /** Track RTP activity on negotiated channels and disconnect after media silence. */
 export class RtspMediaWatchdogService {
   private readonly mediaRtpChannels = new Set<number>();
   private lastMediaPacketTimeMs = 0;
   private timer: NodeJS.Timeout | undefined;
-
   /** Keep the media timeout and active socket provider for inactivity checks. */
-  constructor(
+  public constructor(
     private readonly mediaTimeoutMs: number,
     private readonly socketProvider: () => Socket | undefined,
   ) {}
@@ -34,9 +32,7 @@ export class RtspMediaWatchdogService {
       RTSP_CLIENT_DEFAULTS.minimumWatchdogIntervalMs,
       Math.min(
         RTSP_CLIENT_DEFAULTS.maximumWatchdogIntervalMs,
-        Math.floor(
-          this.mediaTimeoutMs / RTSP_CLIENT_DEFAULTS.watchdogIntervalDivisor,
-        ),
+        Math.floor(this.mediaTimeoutMs / RTSP_CLIENT_DEFAULTS.watchdogIntervalDivisor),
       ),
     );
     this.timer = setInterval(() => {
@@ -45,9 +41,7 @@ export class RtspMediaWatchdogService {
         Date.now() - this.lastMediaPacketTimeMs >= this.mediaTimeoutMs
       ) {
         this.socketProvider()?.destroy(
-          new RtspClientError(
-            `No RTP media packets were received for ${this.mediaTimeoutMs} ms.`,
-          ),
+          new RtspClientError(`No RTP media packets were received for ${this.mediaTimeoutMs} ms.`),
         );
       }
     }, interval);

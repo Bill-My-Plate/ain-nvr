@@ -1,15 +1,4 @@
-
-
-
-
-
-
-
-
-
-
-
-
+/** Resolves an optional positive integer or throws for an invalid setting. */
 export function positiveInteger(value: number | undefined, fallback: number, name: string): number {
   const resolved = value ?? fallback;
   if (!Number.isSafeInteger(resolved) || resolved <= 0) {

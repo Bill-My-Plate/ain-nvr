@@ -226,3 +226,50 @@ test('generation snapshot is delivered before buffered setup media and reconnect
   assert.equal(session.snapshot?.generation, 2);
   await session.stop();
 });
+
+test('stream session parses frames, assembles video, and reports packet and subscriber errors', async () => {
+  const client = new SessionInfoRtspClient(createSession());
+  const session = new RtspStreamSession({
+    url: 'rtsp://camera.example/stream',
+    now: () => 1_234,
+    clientFactory: () => client,
+  });
+  const packets: Array<{ channel: number; generation: number | undefined; arrivalTimeMs: number; hasRtp: boolean }> = [];
+  const accessUnits: Array<{ type: string; rtpTimestamp: number }> = [];
+  const subscriberErrors: Error[] = [];
+  const packetErrors: Error[] = [];
+  session.subscribeMediaPackets(() => { throw new Error('subscriber failed'); });
+  session.subscribeMediaPackets((packet) => packets.push({
+    channel: packet.channel,
+    generation: packet.sessionGeneration,
+    arrivalTimeMs: packet.arrivalTimeMs,
+    hasRtp: packet.rtp !== undefined,
+  }));
+  session.subscribeVideoAccessUnits((unit) => accessUnits.push({
+    type: unit.type,
+    rtpTimestamp: unit.rtpTimestamp,
+  }));
+  session.on('subscriber-error', (error: Error) => subscriberErrors.push(error));
+  session.on('packet-error', (error: Error) => packetErrors.push(error));
+
+  await session.start();
+  client.emit('interleaved', { ...mediaPacket(1, 90_000, Buffer.from([0x65, 1])).frame, channel: 4 });
+  client.emit('interleaved', { ...mediaPacket(2, 99_000, Buffer.from([0x41, 2])).frame, channel: 4 });
+  client.emit('interleaved', { ...mediaPacket(3, 108_000, Buffer.from([0x41, 3])).frame, channel: 12 });
+  client.emit('interleaved', {
+    type: 'interleaved-frame',
+    channel: 4,
+    rawHeader: Buffer.from([0x24, 4, 0, 1]),
+    payload: Buffer.from([0x80]),
+  });
+
+  assert.deepEqual(packets, [
+    { channel: 4, generation: 1, arrivalTimeMs: 1_234, hasRtp: true },
+    { channel: 4, generation: 1, arrivalTimeMs: 1_234, hasRtp: true },
+    { channel: 12, generation: 1, arrivalTimeMs: 1_234, hasRtp: false },
+  ]);
+  assert.deepEqual(accessUnits, [{ type: 'key', rtpTimestamp: 90_000 }]);
+  assert.equal(subscriberErrors.length, 3);
+  assert.equal(packetErrors.length, 1);
+  await session.stop();
+});

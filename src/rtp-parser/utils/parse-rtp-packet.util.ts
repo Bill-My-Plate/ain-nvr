@@ -2,7 +2,6 @@ import type { RtpHeaderExtension } from '../types/rtp-header-extension.type.js';
 import type { RtpPacket } from '../types/rtp-packet.interface.js';
 import { RtpPacketError } from '../errors/rtp-packet-error.class.js';
 import { RTP_HEADER_LAYOUT } from '../constants/rtp-header-layout.constant.js';
-
 /**
  * Parse one complete RTP packet, without the RTSP `$` frame header.
  *
@@ -14,6 +13,7 @@ import { RTP_HEADER_LAYOUT } from '../constants/rtp-header-layout.constant.js';
  * After that come the CSRC identifiers, an optional extension header and
  * extension data, the media payload, and optional trailing padding.
  * The caller supplies the entire RTP packet as `raw`, not a TCP chunk.
+ * @param raw One complete RTP packet of at least 12 bytes. Header bytes 0-1 hold flags/payload type, 2-3 sequence, 4-7 timestamp, 8-11 SSRC; optional CSRC, extension, payload, and padding follow.
  */
 export function parseRtpPacket(raw: Buffer): RtpPacket {
   if (raw.length < RTP_HEADER_LAYOUT.fixedHeaderBytes) {
@@ -30,17 +30,19 @@ export function parseRtpPacket(raw: Buffer): RtpPacket {
   const hasPadding = (first & RTP_HEADER_LAYOUT.paddingFlag) !== 0;
   const hasExtension = (first & RTP_HEADER_LAYOUT.extensionFlag) !== 0;
   const csrcCount = first & RTP_HEADER_LAYOUT.csrcCountMask;
-  let offset = RTP_HEADER_LAYOUT.fixedHeaderBytes
-    + csrcCount * RTP_HEADER_LAYOUT.csrcIdentifierBytes;
+  let offset =
+    RTP_HEADER_LAYOUT.fixedHeaderBytes + csrcCount * RTP_HEADER_LAYOUT.csrcIdentifierBytes;
   if (raw.length < offset) {
     throw new RtpPacketError('RTP CSRC list exceeds packet length.');
   }
 
   const csrc: number[] = [];
   for (let index = 0; index < csrcCount; index += 1) {
-    csrc.push(raw.readUInt32BE(
-      RTP_HEADER_LAYOUT.fixedHeaderBytes + index * RTP_HEADER_LAYOUT.csrcIdentifierBytes,
-    ));
+    csrc.push(
+      raw.readUInt32BE(
+        RTP_HEADER_LAYOUT.fixedHeaderBytes + index * RTP_HEADER_LAYOUT.csrcIdentifierBytes,
+      ),
+    );
   }
 
   let extension: RtpHeaderExtension | undefined;
@@ -50,8 +52,9 @@ export function parseRtpPacket(raw: Buffer): RtpPacket {
     }
     const profile = raw.readUInt16BE(offset);
     // The extension length counts 32-bit words, excluding its four-byte header.
-    const extensionBytes = raw.readUInt16BE(offset + RTP_HEADER_LAYOUT.extensionLengthOffset)
-      * RTP_HEADER_LAYOUT.extensionLengthWordBytes;
+    const extensionBytes =
+      raw.readUInt16BE(offset + RTP_HEADER_LAYOUT.extensionLengthOffset) *
+      RTP_HEADER_LAYOUT.extensionLengthWordBytes;
     offset += RTP_HEADER_LAYOUT.extensionHeaderBytes;
     if (raw.length < offset + extensionBytes) {
       throw new RtpPacketError('RTP extension data is truncated.');

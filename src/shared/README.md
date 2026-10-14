@@ -1,11 +1,18 @@
 # shared
 
-**Owns:** The domain-independent error and its code.
+Contains the small error contract shared across modules. It has no runtime service or domain-specific utility.
 
-**Internal entrypoint:** [`index.ts`](index.ts) exposes AinNvrError and AinNvrErrorCode.
+## How it works
 
-**Folders:** [types/](types/) (error code), [errors/](errors/) (error class).
+AinNvrError carries a typed error code and optional cause. Domain errors may extend it when they need the same cross-module error contract; this module is not a catch-all for unrelated helpers.
 
-**Invariant:** Keep camera, media, and storage policy in their owning modules.
+**Internal entry point:** [`index.ts`](index.ts). Cross-module imports use this entry point. Published package subpaths are defined by `src/exports/` and `package.json`.
 
-Cross-module imports use this module’s `index.ts`. The package’s published paths remain the facades in `src/exports/` and `src/index.ts`.
+## Module API
+
+- **`AinNvrError`** (value): Base error with an ain-nvr code and optional cause.
+- **`AinNvrErrorCode`** (type): Allowed base error codes.
+
+## Files and review
+
+The module groups declarations in `types/`, utilities in `utils/`, stateful classes in `services/`, and other roles in their matching folders when present. See the [how-it-works guide](/home/khaled/bmp/docs-chats/ain-nvr-refactoring/shared/how-it-works.md) and [file-by-file review map](/home/khaled/bmp/docs-chats/ain-nvr-refactoring/shared/review-map.md).

@@ -1,9 +1,13 @@
-
 import { createH264CodecConfiguration, type H264CodecConfiguration } from '../../h264/index.js';
 import type { RtspSessionTrackInfo } from '../../stream-session/index.js';
 import type { SessionTrack } from '../types/session-track.type.js';
-
+/**
+ * Builds metadata and index structures used when committing a recording segment.
+ */
 export class RecordingSegmentWriterUtil {
+  /**
+   * Positive Integer.
+   */
   public static positiveInteger(value: number, name: string): number {
     if (!Number.isSafeInteger(value) || value <= 0) {
       throw new RangeError(`${name} must be a positive safe integer.`);
@@ -11,9 +15,10 @@ export class RecordingSegmentWriterUtil {
     return value;
   }
 
-  public static toSessionTrack(
-    track: RtspSessionTrackInfo,
-  ): SessionTrack {
+  /**
+   * Converts the value to session Track.
+   */
+  public static toSessionTrack(track: RtspSessionTrackInfo): SessionTrack {
     let configuration: H264CodecConfiguration | undefined;
     if (track.parameterSets !== undefined) {
       try {

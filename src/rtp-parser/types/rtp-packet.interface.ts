@@ -1,5 +1,7 @@
-import type { RtpHeaderExtension } from "./rtp-header-extension.type.js";
-
+import type { RtpHeaderExtension } from './rtp-header-extension.type.js';
+/**
+ * Validated RTP header fields, payload view, and original packet bytes.
+ */
 export interface RtpPacket {
   /** Marker bit; its meaning depends on the payload format (for H.264, the end of an access unit). */
   readonly marker: boolean;
@@ -13,7 +15,7 @@ export interface RtpPacket {
   readonly ssrc: number;
   /** Contributing source identifiers from an RTP mixer; empty when absent. */
   readonly csrc: readonly number[];
-  /** Optional header extension profile and its unprocessed data. */
+  /** Parsed RTP header extension, when the X flag is set. */
   readonly extension?: RtpHeaderExtension;
   /** Trailing padding length, including its final count byte; zero when absent. */
   readonly paddingBytes: number;

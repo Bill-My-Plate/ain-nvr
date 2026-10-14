@@ -1,3 +1,4 @@
+import { RECORDING_PARSER_CONSTANTS } from '../constants/recording-parser-numeric-values.constant.js';
 import type { MediaPacket } from '../../media/index.js';
 import { RecordingParser } from './recording-parser.class.js';
 
@@ -5,7 +6,6 @@ import type { RecordingPipelineState } from '../types/recording-pipeline-state.t
 import type { RecordingPipelineOptions } from '../types/recording-pipeline-options.interface.js';
 import type { RecordingPipelineStatus } from '../types/recording-pipeline-status.interface.js';
 import { positiveInteger } from '../utils/positive-integer.util.js';
-
 /**
  * Serializes packet writes and applies bounded socket backpressure. It does not choose
  * file names, write metadata, move cache files, or delete recordings.
@@ -26,18 +26,28 @@ export class RecordingPipeline<TLocation> {
   private wake: (() => void) | undefined;
   private runPromise: Promise<void> | undefined;
   private lastError: Error | undefined;
-
-  constructor(private readonly options: RecordingPipelineOptions<TLocation>) {
-    this.pauseAtBytes = positiveInteger(options.pauseAtBytes, 8 * 1024 * 1024, 'pauseAtBytes');
-    this.resumeAtBytes = positiveInteger(options.resumeAtBytes, 4 * 1024 * 1024, 'resumeAtBytes');
+  /**
+   * Creates the instance and initializes its state.
+   */
+  public constructor(private readonly options: RecordingPipelineOptions<TLocation>) {
+    this.pauseAtBytes = positiveInteger(
+      options.pauseAtBytes,
+      RECORDING_PARSER_CONSTANTS.defaultPauseAtBytes,
+      'pauseAtBytes',
+    );
+    this.resumeAtBytes = positiveInteger(
+      options.resumeAtBytes,
+      RECORDING_PARSER_CONSTANTS.defaultResumeAtBytes,
+      'resumeAtBytes',
+    );
     this.maximumQueuedBytes = positiveInteger(
       options.maximumQueuedBytes,
-      16 * 1024 * 1024,
+      RECORDING_PARSER_CONSTANTS.defaultMaximumQueuedBytes,
       'maximumQueuedBytes',
     );
     this.maximumQueuedPackets = positiveInteger(
       options.maximumQueuedPackets,
-      4_096,
+      RECORDING_PARSER_CONSTANTS.defaultMaximumQueuedPackets,
       'maximumQueuedPackets',
     );
     if (this.resumeAtBytes >= this.pauseAtBytes) {
@@ -49,7 +59,10 @@ export class RecordingPipeline<TLocation> {
     this.parser = new RecordingParser<TLocation>(options);
   }
 
-  get status(): RecordingPipelineStatus {
+  /**
+   * Returns a snapshot of the current status.
+   */
+  public get status(): RecordingPipelineStatus {
     return {
       state: this.stateValue,
       queuedBytes: this.queuedBytes,
@@ -59,7 +72,10 @@ export class RecordingPipeline<TLocation> {
     };
   }
 
-  start(): void {
+  /**
+   * Starts the operation and initializes its resources.
+   */
+  public start(): void {
     if (this.stateValue !== 'idle') throw new Error('Recording pipeline can only be started once.');
     this.stateValue = 'running';
     this.unsubscribe = this.options.source.subscribeMediaPackets((packet) => this.enqueue(packet));
@@ -68,11 +84,17 @@ export class RecordingPipeline<TLocation> {
     });
   }
 
-  requestBoundary(): void {
+  /**
+   * Request Boundary.
+   */
+  public requestBoundary(): void {
     this.parser.requestBoundary();
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Stops active work and releases owned resources.
+   */
+  public async stop(): Promise<void> {
     if (this.stateValue === 'idle') {
       this.stateValue = 'stopped';
       return;
@@ -88,16 +110,23 @@ export class RecordingPipeline<TLocation> {
     if (this.stateValue !== 'failed') this.stateValue = 'stopped';
   }
 
+  /**
+   * Enqueue.
+   */
   private enqueue(packet: MediaPacket): void {
     if (this.stateValue !== 'running') return;
     this.queue.push(packet);
     this.queuedBytes += packet.rawInterleavedFrame.length;
-    if (this.queuedBytes >= this.maximumQueuedBytes
-      || this.queue.length >= this.maximumQueuedPackets) {
-      this.fail(new Error(
-        `Recording queue exceeded ${this.maximumQueuedBytes} bytes or `
-        + `${this.maximumQueuedPackets} packets.`,
-      ));
+    if (
+      this.queuedBytes >= this.maximumQueuedBytes ||
+      this.queue.length >= this.maximumQueuedPackets
+    ) {
+      this.fail(
+        new Error(
+          `Recording queue exceeded ${this.maximumQueuedBytes} bytes or ` +
+            `${this.maximumQueuedPackets} packets.`,
+        ),
+      );
       return;
     }
     if (!this.paused && this.queuedBytes >= this.pauseAtBytes) {
@@ -108,11 +137,16 @@ export class RecordingPipeline<TLocation> {
     this.wake = undefined;
   }
 
+  /**
+   * Runs the operation until completion or cancellation.
+   */
   private async run(): Promise<void> {
     while (!this.stopping || this.queue.length > 0) {
       const packet = this.queue.shift();
       if (packet === undefined) {
-        await new Promise<void>((resolve) => { this.wake = resolve; });
+        await new Promise<void>((resolve) => {
+          this.wake = resolve;
+        });
         continue;
       }
       this.queuedBytes -= packet.rawInterleavedFrame.length;
@@ -129,6 +163,9 @@ export class RecordingPipeline<TLocation> {
     }
   }
 
+  /**
+   * Fail.
+   */
   private fail(error: Error): void {
     if (this.stateValue === 'failed' || this.stateValue === 'stopped') return;
     this.lastError = error;
@@ -144,6 +181,9 @@ export class RecordingPipeline<TLocation> {
     this.options.onError?.(error);
   }
 
+  /**
+   * Resume Source.
+   */
   private resumeSource(): void {
     if (!this.paused) return;
     this.paused = false;

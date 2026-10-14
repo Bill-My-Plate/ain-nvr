@@ -1,11 +1,9 @@
 import { createRequire } from 'node:module';
 
-
 import type { LibavModule } from '../types/libav-module.type.js';
 import { preloadedModule } from '../constants/preloaded-module.constant.js';
-
 /**
- * Preload the libav native addon through a literal require that pkg can detect.
+ * Loads the Scrypted libav native addon through the pkg-compatible path.
  * Normal Node.js applications do not need to call this directly. The libav
  * runtime calls it automatically when it detects a pkg executable.
  */

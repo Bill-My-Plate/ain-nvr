@@ -1,6 +1,3 @@
-
-
-
 /** Decoder settings derived from an SPS/PPS pair. */
 export interface H264DecoderConfiguration {
   /** AVC codec identifier built from the SPS profile, constraints, and level. */

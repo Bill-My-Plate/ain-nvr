@@ -1,3 +1,4 @@
+import { RECORDING_PARSER_CONSTANTS } from '../constants/recording-parser-numeric-values.constant.js';
 import type { MediaPacket } from '../../media/index.js';
 import type { TrackDescription } from '../../media/index.js';
 import { H264ConfigurationTracker } from '../../h264/index.js';
@@ -6,10 +7,11 @@ import type { RtpPacket } from '../../rtp-parser/index.js';
 
 import { RtpClockMapper, RtpTimestampUnwrapper } from '../../rtp-parser/index.js';
 
-
 import type { RecordingIndexEvent } from '../types/recording-index-event.type.js';
 import type { PendingVideoAccessUnit } from '../types/pending-video-access-unit.type.js';
-
+/**
+ * Tracks packet continuity and maps RTP time to recording time using arrival and RTCP anchors.
+ */
 export class TrackIndexer<TLocation> {
   private readonly unwrapper = new RtpTimestampUnwrapper();
   private readonly configurationTracker: H264ConfigurationTracker | undefined;
@@ -22,11 +24,11 @@ export class TrackIndexer<TLocation> {
   private needsBoundaryAnchor = true;
   private pendingVideo: PendingVideoAccessUnit<TLocation> | undefined;
   private lastKeyframeTimestamp: number | undefined;
-
-  constructor(readonly track: TrackDescription) {
-    this.configurationTracker = track.codec === 'h264'
-      ? new H264ConfigurationTracker()
-      : undefined;
+  /**
+   * Creates the instance and initializes its state.
+   */
+  public constructor(readonly track: TrackDescription) {
+    this.configurationTracker = track.codec === 'h264' ? new H264ConfigurationTracker() : undefined;
     if (track.parameterSets !== undefined && this.configurationTracker !== undefined) {
       try {
         this.configurationTracker.seed(track.parameterSets.sps, track.parameterSets.pps);
@@ -36,21 +38,34 @@ export class TrackIndexer<TLocation> {
     }
   }
 
-  discontinuityReason(rtp: RtpPacket, arrivalTimeMs: number):
-  'ssrc-change' | 'timestamp-reset' | undefined {
+  /**
+   * Discontinuity Reason.
+   */
+  public discontinuityReason(
+    rtp: RtpPacket,
+    arrivalTimeMs: number,
+  ): 'ssrc-change' | 'timestamp-reset' | undefined {
     if (this.activeSsrc !== undefined && this.activeSsrc !== rtp.ssrc) return 'ssrc-change';
-    if (this.lastRawTimestamp === undefined || this.lastArrivalTimeMs === undefined) return undefined;
+    if (this.lastRawTimestamp === undefined || this.lastArrivalTimeMs === undefined)
+      return undefined;
     let timestampDelta = rtp.timestamp - this.lastRawTimestamp;
-    if (timestampDelta > 0x8000_0000) timestampDelta -= 0x1_0000_0000;
-    else if (timestampDelta < -0x8000_0000) timestampDelta += 0x1_0000_0000;
+    if (timestampDelta > RECORDING_PARSER_CONSTANTS.rtpTimestampHalfRange)
+      timestampDelta -= RECORDING_PARSER_CONSTANTS.rtpTimestampRange;
+    else if (timestampDelta < -RECORDING_PARSER_CONSTANTS.rtpTimestampHalfRange)
+      timestampDelta += RECORDING_PARSER_CONSTANTS.rtpTimestampRange;
     const arrivalDeltaMs = Math.max(0, arrivalTimeMs - this.lastArrivalTimeMs);
-    const rtpDeltaMs = timestampDelta * 1000 / this.track.clockRate;
-    return rtpDeltaMs < -5_000 || rtpDeltaMs - arrivalDeltaMs > 30_000
+    const rtpDeltaMs =
+      (timestampDelta * RECORDING_PARSER_CONSTANTS.millisecondsPerSecond) / this.track.clockRate;
+    return rtpDeltaMs < -RECORDING_PARSER_CONSTANTS.maximumTimestampRegressionMs ||
+      rtpDeltaMs - arrivalDeltaMs > RECORDING_PARSER_CONSTANTS.maximumTimestampLeadMs
       ? 'timestamp-reset'
       : undefined;
   }
 
-  beginBoundary(resetClock: boolean): void {
+  /**
+   * Begin Boundary.
+   */
+  public beginBoundary(resetClock: boolean): void {
     this.needsBoundaryAnchor = true;
     this.pendingVideo = undefined;
     if (!resetClock) return;
@@ -65,21 +80,30 @@ export class TrackIndexer<TLocation> {
     this.configurationTracker?.resetFragments();
   }
 
-  finishPending(): RecordingIndexEvent<TLocation>[] {
+  /**
+   * Flushes pending index events at the end of the current track.
+   */
+  public finishPending(): RecordingIndexEvent<TLocation>[] {
     const events: RecordingIndexEvent<TLocation>[] = [];
     this.emitPendingKeyframe(events);
     this.pendingVideo = undefined;
     return events;
   }
 
-  inspectRtcp(
-    packet: MediaPacket,
-    location: TLocation,
-  ): RecordingIndexEvent<TLocation>[] {
+  /**
+   * Inspect Rtcp.
+   */
+  public inspectRtcp(packet: MediaPacket, location: TLocation): RecordingIndexEvent<TLocation>[] {
     const report = packet.rtcpSenderReport;
-    if (report === undefined || !Number.isFinite(report.ntpTimeMs) || report.ntpTimeMs < 0
-      || Math.abs(report.ntpTimeMs - packet.arrivalTimeMs) > 5 * 60_000
-      || (this.activeSsrc !== undefined && report.ssrc !== this.activeSsrc)) {
+    if (
+      report === undefined ||
+      !Number.isFinite(report.ntpTimeMs) ||
+      report.ntpTimeMs < 0 ||
+      Math.abs(report.ntpTimeMs - packet.arrivalTimeMs) >
+        RECORDING_PARSER_CONSTANTS.clockAnchorArrivalWindowMultiplier *
+          RECORDING_PARSER_CONSTANTS.maximumClockAnchorSkewMs ||
+      (this.activeSsrc !== undefined && report.ssrc !== this.activeSsrc)
+    ) {
       return [];
     }
     const timeMs = Math.round(report.ntpTimeMs);
@@ -87,21 +111,31 @@ export class TrackIndexer<TLocation> {
     this.clockMapper = new RtpClockMapper(unwrapped, timeMs, this.track.clockRate);
     this.clockSource = 'rtcp-sr';
     this.needsBoundaryAnchor = false;
-    return [{
-      type: 'clock-anchor',
-      location,
-      trackId: this.track.trackId,
-      source: 'rtcp-sr',
-      timeMs,
-      rtpTimestamp: report.rtpTimestamp,
-    }];
+    return [
+      {
+        type: 'clock-anchor',
+        location,
+        trackId: this.track.trackId,
+        source: 'rtcp-sr',
+        timeMs,
+        rtpTimestamp: report.rtpTimestamp,
+      },
+    ];
   }
 
-  inspectRtp(
+  /**
+   * Inspect Rtp.
+   */
+  public inspectRtp(
     packet: MediaPacket,
     location: TLocation,
     lostBefore: number,
-  ): { readonly timeMs: number; readonly events: RecordingIndexEvent<TLocation>[] } {
+  ): {
+    /** Recording time in Unix milliseconds. */
+    readonly timeMs: number;
+    /** Index events emitted for this packet. */
+    readonly events: RecordingIndexEvent<TLocation>[];
+  } {
     const rtp = packet.rtp as RtpPacket;
     const events: RecordingIndexEvent<TLocation>[] = [];
     this.activeSsrc = rtp.ssrc;
@@ -115,23 +149,35 @@ export class TrackIndexer<TLocation> {
       events.push(this.anchor(location, packet.arrivalTimeMs, rtp.timestamp, 'arrival'));
     } else if (previousTimestamp !== undefined && previousArrival !== undefined) {
       let timestampDelta = rtp.timestamp - previousTimestamp;
-      if (timestampDelta > 0x8000_0000) timestampDelta -= 0x1_0000_0000;
-      else if (timestampDelta < -0x8000_0000) timestampDelta += 0x1_0000_0000;
-      const rtpProgressMs = timestampDelta * 1000 / this.track.clockRate;
+      if (timestampDelta > RECORDING_PARSER_CONSTANTS.rtpTimestampHalfRange)
+        timestampDelta -= RECORDING_PARSER_CONSTANTS.rtpTimestampRange;
+      else if (timestampDelta < -RECORDING_PARSER_CONSTANTS.rtpTimestampHalfRange)
+        timestampDelta += RECORDING_PARSER_CONSTANTS.rtpTimestampRange;
+      const rtpProgressMs =
+        (timestampDelta * RECORDING_PARSER_CONSTANTS.millisecondsPerSecond) / this.track.clockRate;
       const arrivalProgressMs = packet.arrivalTimeMs - previousArrival;
-      if (Math.abs(rtpProgressMs - arrivalProgressMs) > 5_000) {
-        this.clockMapper = new RtpClockMapper(unwrapped, packet.arrivalTimeMs, this.track.clockRate);
+      if (
+        Math.abs(rtpProgressMs - arrivalProgressMs) >
+        RECORDING_PARSER_CONSTANTS.maximumTimestampRegressionMs
+      ) {
+        this.clockMapper = new RtpClockMapper(
+          unwrapped,
+          packet.arrivalTimeMs,
+          this.track.clockRate,
+        );
         this.clockSource = 'arrival';
         events.push(this.anchor(location, packet.arrivalTimeMs, rtp.timestamp, 'arrival'));
       }
     }
     if (this.needsBoundaryAnchor && events.length === 0) {
-      events.push(this.anchor(
-        location,
-        Math.round(this.clockMapper.toWallClockMs(unwrapped)),
-        rtp.timestamp,
-        this.clockSource ?? 'arrival',
-      ));
+      events.push(
+        this.anchor(
+          location,
+          Math.round(this.clockMapper.toWallClockMs(unwrapped)),
+          rtp.timestamp,
+          this.clockSource ?? 'arrival',
+        ),
+      );
     }
     this.needsBoundaryAnchor = false;
     this.lastRawTimestamp = rtp.timestamp;
@@ -146,6 +192,9 @@ export class TrackIndexer<TLocation> {
     return { timeMs, events };
   }
 
+  /**
+   * Inspect Video.
+   */
   private inspectVideo(
     rtp: RtpPacket,
     location: TLocation,
@@ -199,10 +248,19 @@ export class TrackIndexer<TLocation> {
     }
   }
 
+  /**
+   * Emit Pending Keyframe.
+   */
   private emitPendingKeyframe(events: RecordingIndexEvent<TLocation>[]): void {
     const pending = this.pendingVideo;
-    if (pending === undefined || pending.damaged || pending.fuNalType !== undefined || !pending.hasIdr
-      || this.lastKeyframeTimestamp === pending.timestamp) return;
+    if (
+      pending === undefined ||
+      pending.damaged ||
+      pending.fuNalType !== undefined ||
+      !pending.hasIdr ||
+      this.lastKeyframeTimestamp === pending.timestamp
+    )
+      return;
     this.lastKeyframeTimestamp = pending.timestamp;
     events.push({
       type: 'keyframe',
@@ -214,6 +272,9 @@ export class TrackIndexer<TLocation> {
     });
   }
 
+  /**
+   * Anchor.
+   */
   private anchor(
     location: TLocation,
     timeMs: number,

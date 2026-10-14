@@ -1,3 +1,4 @@
+import { RTSP_PARSER_CONSTANTS } from '../constants/rtsp-parser-numeric-values.constant.js';
 import { ByteQueue } from '../services/byte-queue.class.js';
 import { RtspParseError } from '../errors/rtsp-parse-error.class.js';
 import { type RtspParserLimits } from '../types/rtsp-parser-limits.interface.js';
@@ -5,7 +6,9 @@ import { type RtspParserLimits } from '../types/rtsp-parser-limits.interface.js'
 import { RTSP_INTERLEAVED_MAGIC } from '../constants/rtsp-interleaved-magic.constant.js';
 import { INTERLEAVED_HEADER_LENGTH } from '../constants/interleaved-header-length.constant.js';
 import type { RtspInterleavedFrame } from '../types/rtsp-interleaved-frame.interface.js';
-
+/**
+ * Reads one complete dollar-prefixed interleaved frame when enough bytes are queued.
+ */
 export function tryReadInterleavedFrame(
   queue: ByteQueue,
   limits: RtspParserLimits,
@@ -27,7 +30,7 @@ export function tryReadInterleavedFrame(
 
   const rawHeader = queue.peek(INTERLEAVED_HEADER_LENGTH);
   const channel = rawHeader.readUInt8(1);
-  const payloadLength = rawHeader.readUInt16BE(2);
+  const payloadLength = rawHeader.readUInt16BE(RTSP_PARSER_CONSTANTS.interleavedLengthOffset);
 
   if (payloadLength === 0) {
     throw new RtspParseError(

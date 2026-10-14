@@ -1,11 +1,28 @@
 # recording-parser
 
-**Owns:** Storage-neutral packet indexing and ordered writer calls.
+Converts live media packets into recording write requests and index events. It tracks RTP continuity and time anchors, requests segment boundaries, and manages a bounded asynchronous writer pipeline.
 
-**Internal entrypoint:** [`index.ts`](index.ts) exposes RecordingParser, RecordingPipeline, events, writer contracts, and serialization helper.
+## How it works
 
-**Folders:** [types/](types/) (types, interfaces, and enums), [utils/](utils/) (single-purpose functions), [services/](services/) (stateful classes).
+RecordingParser keeps per-track reorder and index state and serializes packets with RTSP interleaved headers. RecordingPipeline owns the source subscription, queue, writer lifecycle, and stop/flush behavior. TrackIndexer maps RTP time to recording time, using credible RTCP sender reports when available.
 
-**Invariant:** Flush/index callbacks complete before the host publishes a segment.
+**Internal entry point:** [`index.ts`](index.ts). Cross-module imports use this entry point. Published package subpaths are defined by `src/exports/` and `package.json`.
 
-Cross-module imports use this module’s `index.ts`. The package’s published paths remain the facades in `src/exports/` and `src/index.ts`.
+## Module API
+
+- **`serializeInterleavedFrame`** (value): Prefixes an RTP or RTCP packet with an RTSP interleaved header.
+- **`RecordingParser`** (value): Orders packets and emits write/index work.
+- **`RecordingWriteRequest`** (type): One byte write request with track and timing metadata.
+- **`RecordingPacketWriter`** (type): Writer contract consumed by the parser or pipeline.
+- **`RecordingIndexEvent`** (type): Index update emitted while recording.
+- **`RecordingParserOptions`** (type): Parser tracks, timing and reorder settings.
+- **`RecordingParserStatus`** (type): Parser counters and state snapshot.
+- **`RecordingPipeline`** (value): Consumes a source and drives the parser and writer lifecycle.
+- **`RecordingPacketSource`** (type): Subscription contract for live packets.
+- **`RecordingPipelineState`** (type): Pipeline lifecycle state.
+- **`RecordingPipelineOptions`** (type): Source, writer, queue and lifecycle settings.
+- **`RecordingPipelineStatus`** (type): Pipeline state and queue counters.
+
+## Files and review
+
+The module groups declarations in `types/`, utilities in `utils/`, stateful classes in `services/`, and other roles in their matching folders when present. See the [how-it-works guide](/home/khaled/bmp/docs-chats/ain-nvr-refactoring/recording-parser/how-it-works.md) and [file-by-file review map](/home/khaled/bmp/docs-chats/ain-nvr-refactoring/recording-parser/review-map.md).

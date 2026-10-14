@@ -1,4 +1,4 @@
-
-
-
-export const initialization: { value?: Promise<void> } = {};
+export const initialization: {
+  /** Stored resource or pending value. */
+  value?: Promise<void>;
+} = {};

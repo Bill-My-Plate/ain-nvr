@@ -1,5 +1,7 @@
 import { asDirectoryUrl } from './as-directory-url.util.js';
-
+/**
+ * Resolves an SDP control URI against the RTSP session or content base.
+ */
 export function resolveRtspControlUrl(
   describeUrl: string,
   mediaControl: string,
@@ -7,9 +9,10 @@ export function resolveRtspControlUrl(
   contentBase?: string,
 ): string {
   const base = contentBase ?? describeUrl;
-  const sessionBase = !sessionControl || sessionControl === '*'
-    ? base
-    : new URL(sessionControl, asDirectoryUrl(base)).toString();
+  const sessionBase =
+    !sessionControl || sessionControl === '*'
+      ? base
+      : new URL(sessionControl, asDirectoryUrl(base)).toString();
 
   if (mediaControl === '*') {
     return sessionBase;

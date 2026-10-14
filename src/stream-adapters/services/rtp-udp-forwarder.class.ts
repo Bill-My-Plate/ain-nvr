@@ -1,9 +1,12 @@
+import { STREAM_ADAPTER_CONSTANTS } from '../constants/stream-adapters-numeric-values.constant.js';
 import dgram, { type Socket } from 'node:dgram';
 import type { MediaPacket, RtspStreamSession } from '../../stream-session/index.js';
 
 import type { RtpUdpForwarderOptions } from '../types/rtp-udp-forwarder-options.interface.js';
 import type { RtpUdpForwarderStatus } from '../types/rtp-udp-forwarder-status.interface.js';
-
+/**
+ * Forwards RTP from a live stream session to configured UDP endpoints.
+ */
 export class RtpUdpForwarder {
   private readonly host: string;
   private readonly maximumPendingPackets: number;
@@ -13,12 +16,19 @@ export class RtpUdpForwarder {
   private forwardedPackets = 0;
   private droppedPackets = 0;
   private stopped = false;
-
-  constructor(private readonly options: RtpUdpForwarderOptions) {
-    if (!Number.isInteger(options.port) || options.port <= 0 || options.port > 65_535) {
+  /**
+   * Creates the instance and initializes its state.
+   */
+  public constructor(private readonly options: RtpUdpForwarderOptions) {
+    if (
+      !Number.isInteger(options.port) ||
+      options.port <= 0 ||
+      options.port > STREAM_ADAPTER_CONSTANTS.maximumPort
+    ) {
       throw new RangeError('port must be between 1 and 65535.');
     }
-    this.maximumPendingPackets = options.maximumPendingPackets ?? 1_024;
+    this.maximumPendingPackets =
+      options.maximumPendingPackets ?? STREAM_ADAPTER_CONSTANTS.defaultMaximumPendingPackets;
     if (!Number.isSafeInteger(this.maximumPendingPackets) || this.maximumPendingPackets <= 0) {
       throw new RangeError('maximumPendingPackets must be a positive safe integer.');
     }
@@ -26,12 +36,18 @@ export class RtpUdpForwarder {
     this.socket = options.socketFactory?.() ?? dgram.createSocket('udp4');
   }
 
-  start(session: RtspStreamSession): void {
+  /**
+   * Starts the operation and initializes its resources.
+   */
+  public start(session: RtspStreamSession): void {
     if (this.unsubscribe !== undefined) throw new Error('RTP forwarder is already started.');
     this.unsubscribe = session.subscribeMediaPackets((packet) => this.forward(packet));
   }
 
-  get status(): RtpUdpForwarderStatus {
+  /**
+   * Returns a snapshot of the current status.
+   */
+  public get status(): RtpUdpForwarderStatus {
     return {
       forwardedPackets: this.forwardedPackets,
       droppedPackets: this.droppedPackets,
@@ -39,7 +55,10 @@ export class RtpUdpForwarder {
     };
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Stops active work and releases owned resources.
+   */
+  public async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
     this.unsubscribe?.();
@@ -54,6 +73,9 @@ export class RtpUdpForwarder {
     });
   }
 
+  /**
+   * Forward.
+   */
   private forward(packet: MediaPacket): void {
     if (this.stopped || packet.track?.mediaType !== 'video' || packet.rtp === undefined) return;
     if (this.pendingPackets >= this.maximumPendingPackets) {

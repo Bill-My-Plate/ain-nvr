@@ -1,5 +1,4 @@
 import { RTP_SEQUENCE_SPACE } from '../constants/rtp-sequence-space.constant.js';
-
 /**
  * Count forward sequence steps in the 16-bit RTP sequence space.
  * For example, moving from 65535 to 0 has a distance of 1 because the number wraps.

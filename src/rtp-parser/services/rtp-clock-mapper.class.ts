@@ -1,7 +1,13 @@
+import { RTP_PARSER_CONSTANTS } from '../constants/rtp-parser-numeric-values.constant.js';
 import { rtpTicksToMicroseconds } from '../utils/rtp-ticks-to-microseconds.util.js';
-
+/**
+ * Converts unwrapped RTP ticks to Unix milliseconds using a trusted clock anchor.
+ */
 export class RtpClockMapper {
-  constructor(
+  /**
+   * Creates the instance and initializes its state.
+   */
+  public constructor(
     readonly anchorTimestamp: bigint,
     readonly anchorTimeMs: number,
     readonly clockRate: number,
@@ -14,8 +20,11 @@ export class RtpClockMapper {
     }
   }
 
-  toWallClockMs(timestamp: bigint): number {
+  /**
+   * Converts the value to wall Clock Ms.
+   */
+  public toWallClockMs(timestamp: bigint): number {
     const deltaUs = rtpTicksToMicroseconds(timestamp - this.anchorTimestamp, this.clockRate);
-    return this.anchorTimeMs + Number(deltaUs) / 1000;
+    return this.anchorTimeMs + Number(deltaUs) / RTP_PARSER_CONSTANTS.microsecondsPerMillisecond;
   }
 }

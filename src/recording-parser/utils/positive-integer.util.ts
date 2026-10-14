@@ -1,6 +1,6 @@
-
-
-
+/**
+ * Validates an optional positive recording limit and applies its default.
+ */
 export function positiveInteger(value: number | undefined, fallback: number, name: string): number {
   const resolved = value ?? fallback;
   if (!Number.isSafeInteger(resolved) || resolved <= 0) {

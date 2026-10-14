@@ -4,14 +4,15 @@ import { RtspUrlFrameExtractor } from './rtsp-url-frame-extractor.class.js';
 import { type FrameExtractorState } from '../types/frame-extractor-state.type.js';
 
 import type { SharedRtspFrameExtractorOptions } from '../types/shared-rtsp-frame-extractor-options.interface.js';
-
 /** Decodes a shared RTSP session through a loopback-only RTSP/RTP bridge. */
 export class SharedRtspFrameExtractor {
   private readonly bridge: RtspLoopbackBridge;
   private extractor: RtspUrlFrameExtractor | undefined;
   private startPromise: Promise<void> | undefined;
-
-  constructor(private readonly options: SharedRtspFrameExtractorOptions) {
+  /**
+   * Creates the instance and initializes its state.
+   */
+  public constructor(private readonly options: SharedRtspFrameExtractorOptions) {
     this.bridge = new RtspLoopbackBridge({
       source: options.source,
       ...(options.onError === undefined ? {} : { onError: options.onError }),
@@ -19,25 +20,40 @@ export class SharedRtspFrameExtractor {
     });
   }
 
-  get state(): FrameExtractorState {
+  /**
+   * Returns the current lifecycle state.
+   */
+  public get state(): FrameExtractorState {
     return this.extractor?.state ?? 'idle';
   }
 
-  get bridgeStatus(): RtspLoopbackBridgeStatus {
+  /**
+   * Returns the loopback bridge listener and client status.
+   */
+  public get bridgeStatus(): RtspLoopbackBridgeStatus {
     return this.bridge.status;
   }
 
-  start(): Promise<void> {
+  /**
+   * Starts the operation and initializes its resources.
+   */
+  public start(): Promise<void> {
     this.startPromise ??= this.startInternal();
     return this.startPromise;
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Stops active work and releases owned resources.
+   */
+  public async stop(): Promise<void> {
     await this.startPromise?.catch(() => undefined);
     await this.extractor?.stop();
     await this.bridge.stop();
   }
 
+  /**
+   * Start Internal.
+   */
   private async startInternal(): Promise<void> {
     const url = await this.bridge.start();
     const { source: _source, bridge: _bridge, ...extractorOptions } = this.options;

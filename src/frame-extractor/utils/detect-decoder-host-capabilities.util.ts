@@ -1,10 +1,10 @@
 import { cpus } from 'node:os';
 import { readdirSync } from 'node:fs';
 
-
-
 import type { DecoderHostCapabilities } from '../types/decoder-host-capabilities.interface.js';
-
+/**
+ * Reads host and device capabilities used for decoder selection.
+ */
 export function detectDecoderHostCapabilities(
   environment: NodeJS.ProcessEnv = process.env,
 ): DecoderHostCapabilities {
@@ -23,15 +23,11 @@ export function detectDecoderHostCapabilities(
     platform: process.platform,
     arch: process.arch,
     renderDevices,
-    cudaAvailable: (
-      process.platform === 'linux'
-      && Boolean(environment.NVIDIA_VISIBLE_DEVICES)
-      && Boolean(environment.NVIDIA_DRIVER_CAPABILITIES)
-    ) || (
-      process.platform === 'win32'
-      && Boolean(environment.CUDA_PATH)
-    ),
-    intelCpu: process.platform === 'win32'
-      && cpus().some((cpu) => cpu.model.includes('Intel')),
+    cudaAvailable:
+      (process.platform === 'linux' &&
+        Boolean(environment.NVIDIA_VISIBLE_DEVICES) &&
+        Boolean(environment.NVIDIA_DRIVER_CAPABILITIES)) ||
+      (process.platform === 'win32' && Boolean(environment.CUDA_PATH)),
+    intelCpu: process.platform === 'win32' && cpus().some((cpu) => cpu.model.includes('Intel')),
   };
 }

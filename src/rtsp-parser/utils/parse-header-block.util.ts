@@ -1,4 +1,3 @@
-
 import { RtspParseError } from '../errors/rtsp-parse-error.class.js';
 import { type RtspParserLimits } from '../types/rtsp-parser-limits.interface.js';
 
@@ -7,20 +6,18 @@ import { HEADER_NAME_PATTERN } from '../constants/header-name-pattern.constant.j
 import { CONTENT_LENGTH_PATTERN } from '../constants/content-length-pattern.constant.js';
 import { RtspHeaders } from '../services/rtsp-headers.class.js';
 import { parseStartLine } from './parse-start-line.util.js';
-
-export function parseHeaderBlock(
-  rawHeader: Buffer,
-  limits: RtspParserLimits,
-) {
-  const text = rawHeader.subarray(0, rawHeader.length - HEADER_TERMINATOR.length)
+/**
+ * Parses a complete RTSP header block into a start line, headers, and body length.
+ * @param rawHeader Complete RTSP header bytes ending in `CRLF CRLF`. The first line is the request/status line, subsequent CRLF-delimited lines are `name: value`, and the body is excluded.
+ */
+export function parseHeaderBlock(rawHeader: Buffer, limits: RtspParserLimits) {
+  const text = rawHeader
+    .subarray(0, rawHeader.length - HEADER_TERMINATOR.length)
     .toString('latin1');
   const lines = text.split('\r\n');
   const rawStartLine = lines.shift();
   if (!rawStartLine) {
-    throw new RtspParseError(
-      'invalid_rtsp_start_line',
-      'RTSP start line is empty.',
-    );
+    throw new RtspParseError('invalid_rtsp_start_line', 'RTSP start line is empty.');
   }
 
   const startLine = parseStartLine(rawStartLine);
@@ -29,18 +26,12 @@ export function parseHeaderBlock(
   for (const line of lines) {
     const separator = line.indexOf(':');
     if (separator <= 0) {
-      throw new RtspParseError(
-        'invalid_rtsp_header',
-        'RTSP header line is malformed.',
-      );
+      throw new RtspParseError('invalid_rtsp_header', 'RTSP header line is malformed.');
     }
 
     const originalName = line.slice(0, separator).trim();
     if (!HEADER_NAME_PATTERN.test(originalName)) {
-      throw new RtspParseError(
-        'invalid_rtsp_header',
-        'RTSP header name is malformed.',
-      );
+      throw new RtspParseError('invalid_rtsp_header', 'RTSP header name is malformed.');
     }
 
     const value = line.slice(separator + 1).trim();
@@ -48,6 +39,8 @@ export function parseHeaderBlock(
     headers.set(originalName, previous === undefined ? value : `${previous}, ${value}`);
   }
 
+  // A declared body length is validated before the caller attempts to buffer
+  // that body; absent Content-Length means this message has no body.
   const rawContentLength = headers.get('content-length');
   if (rawContentLength === undefined) {
     return { startLine, headers, contentLength: 0 };

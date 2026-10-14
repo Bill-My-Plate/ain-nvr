@@ -1,5 +1,4 @@
 import { type RtspMessage } from '../../rtsp-parser/index.js';
-
 /** Request awaiting a camera response with the matching CSeq. */
 export type PendingRequest = {
   /** Complete the request with the matching RTSP response. */

@@ -65,3 +65,22 @@ Feed each received chunk to the same instance. Call `finish()` after the last ch
 `RtspHeaders` stores names in lowercase and accepts any case for lookup and mutation. `RtspMessage.headers` is typed as `RtspHeaders`, which is exported from the module and package facade.
 
 Cross-module imports use this module’s `index.ts`. The package’s published paths remain the facades in `src/exports/` and `src/index.ts`.
+
+## Other module API
+
+- **`ByteQueue`**: buffers partial TCP input and exposes bounded peek, read, and search operations.
+- **`RtspParseError`**: reports invalid RTSP or interleaved input with a code.
+- **`DEFAULT_RTSP_PARSER_LIMITS`**: default header, body, and interleaved payload limits.
+- **`resolveRtspParserLimits`**: validates options and fills in those defaults.
+- **`RtspParserLimits`**: resolved parser byte limits.
+- **`tryReadRtspMessage`**: extracts one complete RTSP message from a byte queue when available.
+- **`RtspRequestLine`** and **`RtspResponseLine`**: parsed request and response start-line shapes.
+- **`RtspInterleavedFrame`**, **`RtspMessage`**, and **`RtspStreamItem`**: parsed output variants.
+- **`RtspHeaders`**: case-insensitive RTSP header collection.
+- **`RtspParserOptions`** and **`RtspParserMode`**: parser construction options and accepted input mode.
+- **`parseSdp`**: parses an SDP session description used during RTSP setup.
+- **`resolveRtspControlUrl`**: resolves media control URLs relative to the session URL.
+- **`selectH264VideoMedia`** and **`selectG711AudioMedia`**: choose supported media from parsed SDP.
+- **`SdpRtpMap`**, **`SdpMediaDescription`**, and **`SdpDescription`**: SDP codec mapping, media section, and session shapes.
+
+See [how-it-works.md](/home/khaled/bmp/docs-chats/ain-nvr-refactoring/rtsp-parser/how-it-works.md) and [review-map.md](/home/khaled/bmp/docs-chats/ain-nvr-refactoring/rtsp-parser/review-map.md) for the processing flow and file list.

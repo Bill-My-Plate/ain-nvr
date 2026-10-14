@@ -1,6 +1,3 @@
-
-
-
 /** SPS/PPS NAL units used to configure an H.264 decoder. */
 export type H264ParameterSets = {
   /** Sequence parameter set NAL data. */

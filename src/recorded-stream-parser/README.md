@@ -1,11 +1,24 @@
 # recorded-stream-parser
 
-**Owns:** Bounded parsing of stored RTSP-interleaved bytes through an abstract reader.
+Reads recorded RTSP interleaved bytes and reconstructs per-track RTP packets using stored segment metadata. It provides packet timing and sequence gap information to playback.
 
-**Internal entrypoint:** [`index.ts`](index.ts) exposes RecordedRtspParser, source/segment shapes, and errors.
+## How it works
 
-**Folders:** [types/](types/) (types, interfaces, and enums), [utils/](utils/) (single-purpose functions), [services/](services/) (stateful classes), [errors/](errors/) (error classes).
+A segment descriptor supplies track/channel information and clock anchors. The parser scans stored bytes, selects RTP channels, reorders packets per track, and reports gaps. It does not open a live camera connection or write recordings.
 
-**Invariant:** Never read beyond safeLength; tolerate short reads while preserving packet gaps.
+**Internal entry point:** [`index.ts`](index.ts). Cross-module imports use this entry point. Published package subpaths are defined by `src/exports/` and `package.json`.
 
-Cross-module imports use this module’s `index.ts`. The package’s published paths remain the facades in `src/exports/` and `src/index.ts`.
+## Module API
+
+- **`RecordedStreamError`** (value): Error raised for invalid recorded media.
+- **`RecordedRtspParser`** (value): Parses recorded interleaved bytes into ordered packets.
+- **`RecordedByteSource`** (type): Contract for reading bytes from a stored segment.
+- **`ClockAnchor`** (type): RTP-to-wall-clock timing reference.
+- **`RecordedSegmentDescriptor`** (type): Stored segment and track information required for parsing.
+- **`SequenceGap`** (type): Lost or skipped RTP sequence range.
+- **`RecordedPacket`** (type): Parsed packet with recording time and gap metadata.
+- **`RecordedRtspParserOptions`** (type): Parser limits and reorder settings.
+
+## Files and review
+
+The module groups declarations in `types/`, utilities in `utils/`, stateful classes in `services/`, and other roles in their matching folders when present. See the [how-it-works guide](/home/khaled/bmp/docs-chats/ain-nvr-refactoring/recorded-stream-parser/how-it-works.md) and [file-by-file review map](/home/khaled/bmp/docs-chats/ain-nvr-refactoring/recorded-stream-parser/review-map.md).

@@ -1,14 +1,16 @@
 import type { DigestChallenge } from '../types/digest-challenge.type.js';
 import type { RtspAuthChallenge } from '../types/rtsp-auth-challenge.type.js';
 import { parseParameters } from './parse-parameters.util.js';
-
 /** Select a supported Digest or Basic challenge and validate its required parameters. */
 export function parseRtspAuthChallenge(value: string): RtspAuthChallenge {
   const digestIndex = value.search(/(?:^|,)\s*Digest\s+/iu);
   const basicIndex = value.search(/(?:^|,)\s*Basic\s+/iu);
   // Prefer Digest when a combined header also offers Basic.
   if (digestIndex >= 0) {
-    const digest = value.slice(digestIndex).replace(/^[,\s]*/u, '').replace(/^Digest\s+/iu, '');
+    const digest = value
+      .slice(digestIndex)
+      .replace(/^[,\s]*/u, '')
+      .replace(/^Digest\s+/iu, '');
     const parameters = parseParameters(digest);
     const realm = parameters.get('realm');
     const nonce = parameters.get('nonce');
@@ -36,7 +38,10 @@ export function parseRtspAuthChallenge(value: string): RtspAuthChallenge {
   }
 
   if (basicIndex >= 0) {
-    const basic = value.slice(basicIndex).replace(/^[,\s]*/u, '').replace(/^Basic\s+/iu, '');
+    const basic = value
+      .slice(basicIndex)
+      .replace(/^[,\s]*/u, '')
+      .replace(/^Basic\s+/iu, '');
     const realm = parseParameters(basic).get('realm');
     return { scheme: 'Basic', ...(realm === undefined ? {} : { realm }) };
   }

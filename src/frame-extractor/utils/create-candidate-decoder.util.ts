@@ -1,11 +1,10 @@
-
-
-
 import type { LibavDecoderLike } from '../types/libav-decoder-like.type.js';
 import type { LibavFormatContextLike } from '../types/libav-format-context-like.type.js';
 
 import type { DecoderCandidate } from '../types/decoder-candidate.interface.js';
-
+/**
+ * Creates a libav decoder for the selected candidate and stream.
+ */
 export function createCandidateDecoder(
   context: LibavFormatContextLike,
   streamIndex: number,
@@ -23,11 +22,7 @@ export function createCandidateDecoder(
     );
   }
   if (candidate.decoder !== undefined) {
-    return context.createDecoder(
-      streamIndex,
-      candidate.hardwareDevice,
-      candidate.decoder,
-    );
+    return context.createDecoder(streamIndex, candidate.hardwareDevice, candidate.decoder);
   }
   return context.createDecoder(streamIndex, candidate.hardwareDevice);
 }

@@ -1,15 +1,15 @@
-
 import { parseH264Sps } from './parse-h264-sps.util.js';
 
 import type { H264CodecConfiguration } from '../types/h264-codec-configuration.interface.js';
 import { splitH264NalUnits } from './split-h264-nal-units.util.js';
 import { validNal } from './valid-nal.util.js';
 import { H264NalType } from '../types/h264-nal-type.enum.js';
-
 /**
  * Build decoder settings from SPS and PPS NAL units.
  * Each input may contain a raw NAL, Annex-B start codes, or multiple NAL units;
  * the first valid SPS and PPS found across both inputs are used.
+ * @param spsData Complete SPS and PPS NALs. Each starts with a one-byte H.264 NAL header; the SPS supplies profile, compatibility, and level bytes for the AVC configuration record.
+ * @param ppsData Complete SPS and PPS NALs. Each starts with a one-byte H.264 NAL header; the SPS supplies profile, compatibility, and level bytes for the AVC configuration record.
  */
 export function createH264CodecConfiguration(
   spsData: Buffer,

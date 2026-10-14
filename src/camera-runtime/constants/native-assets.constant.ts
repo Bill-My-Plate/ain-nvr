@@ -1,10 +1,4 @@
-
-
-
-
-
-
-
-
-
-export const nativeAssets: { value: Promise<void> | undefined } = { value: undefined };
+export const nativeAssets: {
+  /** Stored resource or pending value. */
+  value: Promise<void> | undefined;
+} = { value: undefined };

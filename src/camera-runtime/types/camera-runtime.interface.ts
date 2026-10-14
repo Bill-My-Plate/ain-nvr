@@ -1,9 +1,21 @@
-
-
-
 import type { CameraLease } from './camera-lease.interface.js';
-
+/**
+ * Contract for acquiring camera leases and shutting down the registry.
+ */
 export interface CameraRuntime {
-  acquire(input: { cameraId: string; url: string; signal?: AbortSignal }): Promise<CameraLease>;
+  /**
+   * Acquires a lease for the requested camera and RTSP URL.
+   */
+  acquire(input: {
+    /** Camera identifier for this request or worker. */
+    cameraId: string;
+    /** RTSP URL used by this operation. */
+    url: string;
+    /** Abort signal used to cancel the operation. */
+    signal?: AbortSignal;
+  }): Promise<CameraLease>;
+  /**
+   * Closes this resource and releases owned handles.
+   */
   close(): Promise<void>;
 }

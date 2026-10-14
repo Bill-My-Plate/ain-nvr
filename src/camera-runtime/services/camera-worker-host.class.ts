@@ -1,3 +1,4 @@
+import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-values.constant.js';
 import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads';
 import { privateEntry } from '../utils/private-entry.util.js';
 import { PROTOCOL_VERSION } from '../constants/protocol-version.constant.js';
@@ -12,7 +13,6 @@ import { type FrameMessage } from '../types/frame-message.type.js';
 import { type HostMessage } from '../types/host-message.type.js';
 import { type RuntimeSettings } from '../types/runtime-settings.type.js';
 import { type WorkerMessage } from '../types/worker-message.type.js';
-
 /** One incarnation; never creates its replacement before exit is confirmed. */
 export class CameraWorkerHost {
   private readonly worker: Worker;
@@ -24,8 +24,10 @@ export class CameraWorkerHost {
   private dead = false;
   private failed = false;
   private closing: Promise<void> | undefined;
-
-  constructor(
+  /**
+   * Creates the instance and initializes its state.
+   */
+  public constructor(
     cameraId: string,
     url: string,
     readonly epoch: number,
@@ -39,46 +41,79 @@ export class CameraWorkerHost {
     try {
       this.worker = new Worker(privateEntry('camera-worker-entry'), {
         workerData: { cameraId, url, epoch, settings, framePort: port2 },
-        transferList: [port2], execArgv: [], env: { ...process.env, NODE_OPTIONS: '' },
+        transferList: [port2],
+        execArgv: [],
+        env: { ...process.env, NODE_OPTIONS: '' },
       });
-    } catch (error) { port1.close(); port2.close(); throw error; }
-    port1.on('message', (message: FrameMessage) => { if (message.epoch === epoch) onFrame(message); });
-    port1.on('messageerror', error => this.fail(asError(error), false));
+    } catch (error) {
+      port1.close();
+      port2.close();
+      throw error;
+    }
+    port1.on('message', (message: FrameMessage) => {
+      if (message.epoch === epoch) onFrame(message);
+    });
+    port1.on('messageerror', (error) => this.fail(asError(error), false));
     // Bun requires explicit startup for transferred MessageChannel traffic.
     port1.start();
-    this.worker.on('messageerror', error => this.fail(asError(error), false));
-    this.worker.on('error', error => this.fail(error, false));
-    this.worker.on('exit', code => {
+    this.worker.on('messageerror', (error) => this.fail(asError(error), false));
+    this.worker.on('error', (error) => this.fail(error, false));
+    this.worker.on('exit', (code) => {
       this.dead = true;
       this.frames.close();
       this.exited.resolve();
-      if (this.closing === undefined) this.fail(failure('worker_exited', `Camera worker exited unexpectedly (${code}).`), false);
+      if (this.closing === undefined)
+        this.fail(failure('worker_exited', `Camera worker exited unexpectedly (${code}).`), false);
       else {
         // A failed startup may close its port before acknowledging our close request.
         // Settle it on exit instead of keeping callers until the operation deadline.
-        for (const pending of this.requests.values()) pending.reject(failure('worker_exited', 'Camera worker exited before acknowledging shutdown.'));
+        for (const pending of this.requests.values())
+          pending.reject(
+            failure('worker_exited', 'Camera worker exited before acknowledging shutdown.'),
+          );
       }
     });
     this.worker.on('message', (message: WorkerMessage) => {
       if (message.epoch !== epoch) return;
       if (message.kind === 'ready') {
-        if (message.version !== PROTOCOL_VERSION) this.fail(failure('EPROTO', 'Incompatible camera worker protocol.'), true);
+        if (message.version !== PROTOCOL_VERSION)
+          this.fail(failure('EPROTO', 'Incompatible camera worker protocol.'), true);
         else this.ready.resolve();
       } else if (message.kind === 'response') {
         const pending = this.requests.get(message.id);
         if (message.error === undefined) pending?.resolve();
         else pending?.reject(deserializeError(message.error));
-      } else if (message.kind === 'fatal') this.fail(deserializeError(message.error), message.terminal);
+      } else if (message.kind === 'fatal')
+        this.fail(deserializeError(message.error), message.terminal);
       else onMessage(message);
     });
   }
-  async start(): Promise<void> {
-    try { await deadline(this.ready.promise, this.settings.acquireTimeoutMs, 'Camera negotiation timed out.'); }
-    catch (error) { this.fail(asError(error), false); throw error; }
+  /**
+   * Starts the operation and initializes its resources.
+   */
+  public async start(): Promise<void> {
+    try {
+      await deadline(
+        this.ready.promise,
+        this.settings.acquireTimeoutMs,
+        'Camera negotiation timed out.',
+      );
+    } catch (error) {
+      this.fail(asError(error), false);
+      throw error;
+    }
   }
-  async request(command: Command, timeout = this.settings.operationTimeoutMs): Promise<void> {
-    if (this.dead || (this.closing !== undefined && command.type !== 'close')) throw failure('ECLOSED', 'Camera worker is closed.');
-    if (this.requests.size >= 64) throw failure('EBUSY', 'Too many pending camera commands.');
+  /**
+   * Request.
+   */
+  public async request(
+    command: Command,
+    timeout = this.settings.operationTimeoutMs,
+  ): Promise<void> {
+    if (this.dead || (this.closing !== undefined && command.type !== 'close'))
+      throw failure('ECLOSED', 'Camera worker is closed.');
+    if (this.requests.size >= CAMERA_RUNTIME_CONSTANTS.maximumPendingCameraCommands)
+      throw failure('EBUSY', 'Too many pending camera commands.');
     const id = ++this.requestId;
     const request = deferred<void>();
     this.requests.set(id, request);
@@ -86,19 +121,34 @@ export class CameraWorkerHost {
       this.send({ kind: 'request', epoch: this.epoch, id, command });
       await deadline(request.promise, timeout, `Camera ${command.type} operation timed out.`);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException)?.code === 'ETIMEDOUT' && command.type !== 'close') this.fail(asError(error), false);
+      if ((error as NodeJS.ErrnoException)?.code === 'ETIMEDOUT' && command.type !== 'close')
+        this.fail(asError(error), false);
       throw error;
-    } finally { this.requests.delete(id); }
+    } finally {
+      this.requests.delete(id);
+    }
   }
-  acknowledgeFrame(ack: FrameAck): void {
+  /**
+   * Acknowledge Frame.
+   */
+  public acknowledgeFrame(ack: FrameAck): void {
     if (!this.dead) this.frames.postMessage(ack);
   }
-  send(message: HostMessage): void {
+  /**
+   * Sends send.
+   */
+  public send(message: HostMessage): void {
     if (this.dead) return;
-    try { this.worker.postMessage(message); }
-    catch (error) { this.fail(asError(error), false); }
+    try {
+      this.worker.postMessage(message);
+    } catch (error) {
+      this.fail(asError(error), false);
+    }
   }
-  close(): Promise<void> {
+  /**
+   * Stops active work and releases owned resources.
+   */
+  public close(): Promise<void> {
     if (this.closing !== undefined) return this.closing;
     this.closing = Promise.resolve().then(async () => {
       const closed = failure('ECLOSED', 'Camera worker is closing.');
@@ -108,8 +158,9 @@ export class CameraWorkerHost {
       let error: unknown;
       try {
         await this.request({ type: 'close' }, this.settings.shutdownTimeoutMs);
-      } catch (cause) { error = cause; }
-      finally {
+      } catch (cause) {
+        error = cause;
+      } finally {
         // The close response confirms recorder, decoder and socket cleanup.
         // Explicitly end the thread: closing parentPort alone can keep Bun alive.
         if (!this.dead) await this.worker.terminate();
@@ -120,6 +171,9 @@ export class CameraWorkerHost {
     });
     return this.closing;
   }
+  /**
+   * Fail.
+   */
   private fail(error: Error, terminal: boolean): void {
     if (this.failed || this.closing !== undefined) return;
     this.failed = true;

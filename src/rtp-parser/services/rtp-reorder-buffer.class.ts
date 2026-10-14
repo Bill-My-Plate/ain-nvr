@@ -4,18 +4,18 @@ import type { BufferedPacket } from '../types/buffered-packet.type.js';
 import { RTP_SEQUENCE_SPACE } from '../constants/rtp-sequence-space.constant.js';
 import { RTP_REORDER_WINDOW } from '../constants/rtp-reorder-window.constant.js';
 import { forwardDistance } from '../utils/forward-distance.util.js';
-
 /** Reorder one RTP sequence stream with bounded waiting and 16-bit rollover. */
 export class RtpReorderBuffer<T> {
   private expected: number | undefined;
   private readonly buffered = new Map<number, BufferedPacket<T>>();
-
   /** The window is the maximum number of packets to wait for a missing sequence. */
   public constructor(private readonly windowPackets: number = RTP_REORDER_WINDOW.defaultPackets) {
     const { minimumPackets, maximumPackets } = RTP_REORDER_WINDOW;
-    if (!Number.isInteger(windowPackets)
-      || windowPackets < minimumPackets
-      || windowPackets > maximumPackets) {
+    if (
+      !Number.isInteger(windowPackets) ||
+      windowPackets < minimumPackets ||
+      windowPackets > maximumPackets
+    ) {
       throw new RangeError(
         `RTP reorder window must be between ${minimumPackets} and ${maximumPackets} packets.`,
       );
@@ -24,9 +24,11 @@ export class RtpReorderBuffer<T> {
 
   /** Add a packet and return packets that can now be emitted in sequence. */
   public push(sequenceNumber: number, value: T): ReorderResult<T> {
-    if (!Number.isInteger(sequenceNumber)
-      || sequenceNumber < RTP_SEQUENCE_SPACE.minimum
-      || sequenceNumber > RTP_SEQUENCE_SPACE.maximum) {
+    if (
+      !Number.isInteger(sequenceNumber) ||
+      sequenceNumber < RTP_SEQUENCE_SPACE.minimum ||
+      sequenceNumber > RTP_SEQUENCE_SPACE.maximum
+    ) {
       throw new RangeError('RTP sequence number must be an unsigned 16-bit integer.');
     }
     this.expected ??= sequenceNumber;
@@ -62,8 +64,8 @@ export class RtpReorderBuffer<T> {
         this.buffered.delete(this.expected);
         packets.push({ value: packet.value, lostBefore });
         lostBefore = 0;
-        this.expected = (this.expected + RTP_SEQUENCE_SPACE.nextPacketStep)
-          & RTP_SEQUENCE_SPACE.mask;
+        this.expected =
+          (this.expected + RTP_SEQUENCE_SPACE.nextPacketStep) & RTP_SEQUENCE_SPACE.mask;
         continue;
       }
       // The sequence-space size is larger than any valid forward distance.

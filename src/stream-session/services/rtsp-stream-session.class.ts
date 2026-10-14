@@ -1,16 +1,10 @@
 import { EventEmitter } from 'node:events';
 import { AinNvrError } from '../../shared/index.js';
 import type { TrackDescription } from '../../media/index.js';
-import { H264AccessUnitAssembler } from '../../h264/index.js';
-
-import { parseRtpPacket, type RtpPacket } from '../../rtp-parser/index.js';
-import { RtpReorderBuffer } from '../../rtp-parser/index.js';
-import { findRtcpSenderReport } from '../../rtp-parser/index.js';
 import { RtspClient, type RtspClientSession } from '../../rtsp-client/index.js';
 import type { RtspInterleavedFrame } from '../../rtsp-parser/index.js';
 
 import type { SessionState } from '../types/session-state.type.js';
-import type { MediaPacket } from '../../media/index.js';
 import type { RtspStreamSessionOptions } from '../types/rtsp-stream-session-options.interface.js';
 import type { RtspSessionInfo } from '../types/rtsp-session-info.interface.js';
 import type { RtspSessionSnapshot } from '../types/rtsp-session-snapshot.interface.js';
@@ -19,72 +13,79 @@ import type { AccessUnitSubscriber } from '../types/access-unit-subscriber.type.
 import { positiveInteger } from '../utils/positive-integer.util.js';
 import { abortableDelay } from '../utils/abortable-delay.util.js';
 import { sessionInfoFromSession } from '../utils/session-info-from-session.util.js';
-
+import { DEFAULT_RECONNECT_INITIAL_MS } from '../constants/default-reconnect-initial-ms.constant.js';
+import { DEFAULT_RECONNECT_MAXIMUM_MS } from '../constants/default-reconnect-maximum-ms.constant.js';
+import { RECONNECT_BACKOFF_FACTOR } from '../constants/reconnect-backoff-factor.constant.js';
+import { MAX_STARTUP_BUFFER_BYTES } from '../constants/max-startup-buffer-bytes.constant.js';
+import { MAX_STARTUP_FRAMES } from '../constants/max-startup-frames.constant.js';
+import { RtspMediaProcessor } from './rtsp-media-processor.class.js';
+/** Maintains one reconnecting RTSP stream and publishes negotiated media generations. */
 export class RtspStreamSession extends EventEmitter {
   private readonly reconnectInitialMs: number;
   private readonly reconnectMaximumMs: number;
   private readonly clientFactory: (url: string) => RtspClient;
-  private readonly now: () => number;
+  private readonly mediaProcessor: RtspMediaProcessor;
   private readonly stopController = new AbortController();
-  private readonly packetSubscribers = new Set<PacketSubscriber>();
-  private readonly accessUnitSubscribers = new Set<AccessUnitSubscriber>();
   private runPromise: Promise<void> | undefined;
   private currentClient: RtspClient | undefined;
   private stateValue: SessionState = 'idle';
   private tracksValue: readonly TrackDescription[] = [];
   private sessionInfoValue: RtspSessionInfo | undefined;
-  private assembler: H264AccessUnitAssembler | undefined;
-  private videoReorder = new RtpReorderBuffer<MediaPacket>(4);
-  private videoSsrc: number | undefined;
-  private videoTimestamp: number | undefined;
-  private discontinuityPending = false;
   private pauseCount = 0;
   private snapshotValue: RtspSessionSnapshot | undefined;
   private readonly sessionSubscribers = new Set<(snapshot: RtspSessionSnapshot) => void>();
-
-  constructor(private readonly options: RtspStreamSessionOptions) {
+/** Validates retry settings and initializes a client factory and arrival clock. */
+  public constructor(private readonly options: RtspStreamSessionOptions) {
     super();
     this.reconnectInitialMs = positiveInteger(
       options.reconnectInitialMs,
-      1_000,
+      DEFAULT_RECONNECT_INITIAL_MS,
       'reconnectInitialMs',
     );
     this.reconnectMaximumMs = positiveInteger(
       options.reconnectMaximumMs,
-      30_000,
+      DEFAULT_RECONNECT_MAXIMUM_MS,
       'reconnectMaximumMs',
     );
     this.clientFactory = options.clientFactory ?? ((url) => new RtspClient({ url }));
-    this.now = options.now ?? Date.now;
+    this.mediaProcessor = new RtspMediaProcessor(
+      options.now ?? Date.now,
+      (error) => { this.emit('packet-error', error); },
+      (error) => { this.emit('subscriber-error', error); },
+    );
   }
 
-  get state(): SessionState {
+  /** Current connection lifecycle state. */
+  public get state(): SessionState {
     return this.stateValue;
   }
 
-  get tracks(): readonly TrackDescription[] {
+  /** Track descriptions from the most recently negotiated connection. */
+  public get tracks(): readonly TrackDescription[] {
     return this.tracksValue;
   }
 
-  get snapshot(): RtspSessionSnapshot | undefined {
+  /** Latest successful generation, if the camera has connected. */
+  public get snapshot(): RtspSessionSnapshot | undefined {
     return this.snapshotValue;
   }
 
-  /** Notifications precede all media for the new generation; not replayed. */
-  subscribeSessionChanges(subscriber: (snapshot: RtspSessionSnapshot) => void): () => void {
+  /** Subscribes to future generation changes before their media is published; does not replay. */
+  public subscribeSessionChanges(subscriber: (snapshot: RtspSessionSnapshot) => void): () => void {
     this.sessionSubscribers.add(subscriber);
     return () => this.sessionSubscribers.delete(subscriber);
   }
 
-  /** Available after start(), or RtspSessionManager.acquire(), resolves. */
-  get sessionInfo(): RtspSessionInfo {
+  /** Returns negotiated SDP and tracks after start or manager acquisition resolves. */
+  public get sessionInfo(): RtspSessionInfo {
     if (this.sessionInfoValue === undefined) {
       throw new Error('RTSP session information is not available before the session is streaming.');
     }
     return this.sessionInfoValue;
   }
 
-  async start(signal?: AbortSignal): Promise<void> {
+  /** Starts the reconnect loop once and waits for this caller's first streaming state. */
+  public async start(signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) throw signal.reason;
     if (this.stopController.signal.aborted) throw this.stopController.signal.reason;
     if (this.runPromise !== undefined) {
@@ -98,7 +99,8 @@ export class RtspStreamSession extends EventEmitter {
     await this.waitForStreaming(signal);
   }
 
-  async stop(): Promise<void> {
+  /** Aborts reconnection, closes the current client, and waits for loop cleanup. */
+  public async stop(): Promise<void> {
     if (!this.stopController.signal.aborted) {
       this.stopController.abort(new Error('RTSP stream session stopped.'));
     }
@@ -107,27 +109,30 @@ export class RtspStreamSession extends EventEmitter {
     this.setState('stopped');
   }
 
-  subscribeMediaPackets(subscriber: PacketSubscriber): () => void {
-    this.packetSubscribers.add(subscriber);
-    return () => this.packetSubscribers.delete(subscriber);
+  /** Subscribes to complete interleaved frames after their RTP or RTCP payload is parsed. */
+  public subscribeMediaPackets(subscriber: PacketSubscriber): () => void {
+    return this.mediaProcessor.subscribeMediaPackets(subscriber);
   }
 
-  subscribeVideoAccessUnits(subscriber: AccessUnitSubscriber): () => void {
-    this.accessUnitSubscribers.add(subscriber);
-    return () => this.accessUnitSubscribers.delete(subscriber);
+  /** Subscribes to assembled video access units after RTP reordering. */
+  public subscribeVideoAccessUnits(subscriber: AccessUnitSubscriber): () => void {
+    return this.mediaProcessor.subscribeVideoAccessUnits(subscriber);
   }
 
-  pauseMedia(): void {
+  /** Adds a pause request; the underlying client pauses on the first request. */
+  public pauseMedia(): void {
     this.pauseCount += 1;
     if (this.pauseCount === 1) this.currentClient?.pauseMedia();
   }
 
-  resumeMedia(): void {
+  /** Removes a pause request; the client resumes when the count reaches zero. */
+  public resumeMedia(): void {
     if (this.pauseCount === 0) return;
     this.pauseCount -= 1;
     if (this.pauseCount === 0) this.currentClient?.resumeMedia();
   }
 
+  /** Reconnects until stopped, buffering early frames until their channels are known. */
   private async run(): Promise<void> {
     let delayMs = this.reconnectInitialMs;
     let connectedOnce = false;
@@ -152,7 +157,7 @@ export class RtspStreamSession extends EventEmitter {
         if (!sessionReady) {
           if (startupOverflow) return;
           queuedBytes += frame.rawHeader.length + frame.payload.length;
-          if (queuedBytes > 8 * 1024 * 1024 || queuedFrames.length >= 4_096) {
+          if (queuedBytes > MAX_STARTUP_BUFFER_BYTES || queuedFrames.length >= MAX_STARTUP_FRAMES) {
             startupOverflow = true;
             queuedFrames.length = 0;
             overflowClose = client.close().catch(() => undefined);
@@ -160,7 +165,7 @@ export class RtspStreamSession extends EventEmitter {
           }
           queuedFrames.push(frame);
         }
-        else this.handleFrame(frame);
+        else this.mediaProcessor.handleFrame(frame);
       };
       client.on('interleaved', onFrame);
       client.once('disconnect', (error: Error) => disconnect?.(error));
@@ -168,9 +173,10 @@ export class RtspStreamSession extends EventEmitter {
         const session = await client.connect();
         if (startupOverflow) throw new Error('RTSP negotiation media buffer exceeded its limit.');
         if (this.stopController.signal.aborted) break;
+        // Publish the new track map before draining media received during SETUP/PLAY.
         this.configureSession(session, connectedOnce);
         sessionReady = true;
-        for (const frame of queuedFrames) this.handleFrame(frame);
+        for (const frame of queuedFrames) this.mediaProcessor.handleFrame(frame);
         queuedFrames.length = 0;
         connectedOnce = true;
         delayMs = this.reconnectInitialMs;
@@ -188,7 +194,7 @@ export class RtspStreamSession extends EventEmitter {
         } catch {
           break;
         }
-        delayMs = Math.min(delayMs * 2, this.reconnectMaximumMs);
+        delayMs = Math.min(delayMs * RECONNECT_BACKOFF_FACTOR, this.reconnectMaximumMs);
       } finally {
         this.stopController.signal.removeEventListener('abort', stopped);
         client.removeListener('interleaved', onFrame);
@@ -199,22 +205,15 @@ export class RtspStreamSession extends EventEmitter {
     }
   }
 
+  /** Replaces negotiated tracks and resets video state for a new connection. */
   private configureSession(session: RtspClientSession, reconnect: boolean): void {
     this.sessionInfoValue = sessionInfoFromSession(session);
     this.tracksValue = this.sessionInfoValue.tracks;
-    const video = this.tracksValue.find((track) => track.mediaType === 'video');
-    this.assembler = video === undefined ? undefined : new H264AccessUnitAssembler({
-      payloadType: video.payloadType,
-      clockRate: video.clockRate,
-      ...(video.parameterSets === undefined ? {} : { parameterSets: video.parameterSets }),
-    });
-    this.videoReorder = new RtpReorderBuffer<MediaPacket>(4);
-    this.videoSsrc = undefined;
-    this.videoTimestamp = undefined;
-    this.discontinuityPending = reconnect;
+    const generation = (this.snapshotValue?.generation ?? 0) + 1;
+    this.mediaProcessor.configure(this.tracksValue, generation, reconnect);
     if (this.pauseCount > 0) this.currentClient?.pauseMedia();
     this.snapshotValue = {
-      generation: (this.snapshotValue?.generation ?? 0) + 1,
+      generation,
       sessionInfo: this.sessionInfoValue,
     };
     for (const subscriber of this.sessionSubscribers) {
@@ -226,92 +225,14 @@ export class RtspStreamSession extends EventEmitter {
     }
   }
 
-  private handleFrame(frame: RtspInterleavedFrame): void {
-    try {
-      const arrivalTimeMs = this.now();
-      const track = this.tracksValue.find(
-        (candidate) => candidate.rtpChannel === frame.channel
-          || candidate.rtcpChannel === frame.channel,
-      );
-      const isRtp = track?.rtpChannel === frame.channel;
-      const rtp = isRtp ? parseRtpPacket(frame.payload) : undefined;
-      const rtcpSenderReport = track?.rtcpChannel === frame.channel
-        ? findRtcpSenderReport(frame.payload)
-        : undefined;
-      let videoDiscontinuity = false;
-      if (track?.mediaType === 'video' && rtp !== undefined) {
-        let timestampDelta = this.videoTimestamp === undefined
-          ? 0
-          : rtp.timestamp - this.videoTimestamp;
-        if (timestampDelta > 0x8000_0000) timestampDelta -= 0x1_0000_0000;
-        else if (timestampDelta < -0x8000_0000) timestampDelta += 0x1_0000_0000;
-        videoDiscontinuity = this.discontinuityPending
-          || (this.videoSsrc !== undefined && this.videoSsrc !== rtp.ssrc)
-          || timestampDelta * 1000 / track.clockRate < -5_000;
-      }
-      const packet: MediaPacket = {
-        sessionGeneration: this.snapshotValue!.generation,
-        arrivalTimeMs,
-        ...(track === undefined ? {} : { track }),
-        channel: frame.channel,
-        rawInterleavedFrame: Buffer.concat([frame.rawHeader, frame.payload]),
-        frame,
-        ...(rtp === undefined ? {} : { rtp }),
-        ...(rtcpSenderReport === undefined ? {} : { rtcpSenderReport }),
-        discontinuity: videoDiscontinuity,
-      };
-      for (const subscriber of this.packetSubscribers) {
-        try {
-          subscriber(packet);
-        } catch (error) {
-          this.emit('subscriber-error', error instanceof Error ? error : new Error(String(error)));
-        }
-      }
-      if (track?.mediaType === 'video' && rtp !== undefined) this.handleVideoPacket(packet, rtp);
-    } catch (error) {
-      this.emit('packet-error', error instanceof Error ? error : new Error(String(error)));
-    }
-  }
-
-  private handleVideoPacket(packet: MediaPacket, rtp: RtpPacket): void {
-    if (packet.discontinuity) {
-      this.videoReorder.reset();
-      this.discontinuityPending = true;
-    }
-    this.videoSsrc = rtp.ssrc;
-    this.videoTimestamp = rtp.timestamp;
-    const result = this.videoReorder.push(rtp.sequenceNumber, {
-      ...packet,
-      discontinuity: packet.discontinuity || this.discontinuityPending,
-    });
-    for (const ordered of result.packets) {
-      this.discontinuityPending = false;
-      const orderedRtp = ordered.value.rtp;
-      if (orderedRtp === undefined || this.assembler === undefined) continue;
-      const units = this.assembler.push({
-        rtp: orderedRtp,
-        wallClockTimeMs: ordered.value.arrivalTimeMs,
-        discontinuity: ordered.value.discontinuity,
-        lostBefore: ordered.lostBefore,
-      });
-      for (const unit of units) {
-        for (const subscriber of this.accessUnitSubscribers) {
-          try {
-            subscriber(unit);
-          } catch (error) {
-            this.emit('subscriber-error', error instanceof Error ? error : new Error(String(error)));
-          }
-        }
-      }
-    }
-  }
-
+  /** Emits a state change only when the lifecycle state actually changes. */
   private setState(state: SessionState): void {
     if (this.stateValue === state) return;
     this.stateValue = state;
     this.emit('state', state);
   }
 
+  /** Waits independently for ready, stop, abort, or a terminal initial error. */
   private waitForStreaming(signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) return Promise.reject(signal.reason);
     if (this.stopController.signal.aborted || this.stateValue === 'stopped') {

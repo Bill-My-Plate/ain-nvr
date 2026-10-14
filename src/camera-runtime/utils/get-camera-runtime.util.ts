@@ -1,4 +1,3 @@
-
 import { resolveSettings } from './resolve-settings.util.js';
 
 import { failure } from './failure.util.js';
@@ -10,7 +9,6 @@ import { ManagedCameraRuntime } from '../services/managed-camera-runtime.class.j
 import { registryKey } from '../constants/registry-key.constant.js';
 import { ABI } from '../constants/abi.constant.js';
 import type { Registry } from '../types/registry.type.js';
-
 /**
  * Shared by ESM/CommonJS imports in this JavaScript context. No work starts until acquire().
  * One worker owns each camera's RTSP session and schema-1 cache recording. Native JPEG
@@ -19,14 +17,25 @@ import type { Registry } from '../types/registry.type.js';
  * Worker and decoder entrypoints are resolved relative to the installed package.
  */
 export function getCameraRuntime(options: CameraRuntimeOptions = {}): CameraRuntime {
-  const scope = globalThis as typeof globalThis & { [registryKey]?: Registry };
+  const scope = globalThis as typeof globalThis & {
+    /** [registry Key] associated with this value. */
+    [registryKey]?: Registry;
+  };
   const existing = scope[registryKey];
   if (existing !== undefined) {
-    if (existing.abi !== ABI) throw failure('EPROTO', 'Incompatible ain-nvr camera runtime is already loaded.');
+    if (existing.abi !== ABI)
+      throw failure('EPROTO', 'Incompatible ain-nvr camera runtime is already loaded.');
     if (!existing.runtime.finished) {
-      if (existing.runtime.closed) throw failure('ECLOSED', 'Wait for camera runtime close() before creating another runtime.');
+      if (existing.runtime.closed)
+        throw failure(
+          'ECLOSED',
+          'Wait for camera runtime close() before creating another runtime.',
+        );
       for (const [key, value] of Object.entries(options)) {
-        if (value !== undefined && existing.runtime.settings[key as keyof RuntimeSettings] !== value) {
+        if (
+          value !== undefined &&
+          existing.runtime.settings[key as keyof RuntimeSettings] !== value
+        ) {
           throw failure('EINVAL', `Camera runtime is already configured with a different ${key}.`);
         }
       }

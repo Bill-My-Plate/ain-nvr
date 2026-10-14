@@ -1,4 +1,3 @@
-
 import type { LibavFormatContextLike } from '../types/libav-format-context-like.type.js';
 import type { LibavFrameLike } from '../types/libav-frame-like.type.js';
 import type { LibavRuntime } from '../types/libav-runtime.type.js';
@@ -8,8 +7,15 @@ import type { PkgProcess } from '../types/pkg-process.type.js';
 import { loadedModule } from '../constants/loaded-module.constant.js';
 import { initialization } from '../constants/initialization.constant.js';
 import { preloadScryptedLibavNativeAddon } from './preload-scrypted-libav-native-addon.util.js';
-
-export function createScryptedLibavRuntime(options: { install?: boolean } = {}): LibavRuntime {
+/**
+ * Wraps the native Scrypted libav addon for demuxing, decoding, and JPEG encoding.
+ */
+export function createScryptedLibavRuntime(
+  options: {
+    /** Whether the native libav addon installer may run. */
+    install?: boolean;
+  } = {},
+): LibavRuntime {
   return {
     get keyPacketFlag(): number {
       if (loadedModule.value === undefined) {
@@ -52,10 +58,9 @@ export function createScryptedLibavRuntime(options: { install?: boolean } = {}):
       if (loadedModule.value === undefined) {
         throw new Error('The libav runtime must be initialized before use.');
       }
-      return Buffer.from(await loadedModule.value.toJpeg(
-        frame as import('@scrypted/libav').AVFrame,
-        quality,
-      ));
+      return Buffer.from(
+        await loadedModule.value.toJpeg(frame as import('@scrypted/libav').AVFrame, quality),
+      );
     },
   };
 }

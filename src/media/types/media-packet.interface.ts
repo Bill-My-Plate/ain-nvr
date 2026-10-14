@@ -1,7 +1,6 @@
 import type { TrackDescription } from './track-description.interface.js';
 import type { RtspInterleavedFrame } from '../../rtsp-parser/index.js';
 import type { RtpPacket, RtcpSenderReport } from '../../rtp-parser/index.js';
-
 /** One RTSP interleaved frame and the media information parsed from it. */
 export interface MediaPacket {
   /** Live session generation; absent when a custom or recorded source does not supply one. */
@@ -24,6 +23,6 @@ export interface MediaPacket {
   readonly rtp?: RtpPacket;
   /** Parsed sender report when this frame contains an RTCP Sender Report. */
   readonly rtcpSenderReport?: RtcpSenderReport;
-  /** Whether the source reports a break in media continuity before this packet. */
+  /** Whether a source or timing change precedes this packet. */
   readonly discontinuity: boolean;
 }

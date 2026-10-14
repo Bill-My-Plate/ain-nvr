@@ -1,15 +1,4 @@
-
-
-
-
-
-
-
-
-
-
-
-
+/** Waits for a retry delay and rejects promptly if the session is stopped. */
 export function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.reject(signal.reason);
   return new Promise<void>((resolve, reject) => {

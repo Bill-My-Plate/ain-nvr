@@ -1,8 +1,8 @@
+import { PLAYBACK_CONSTANTS } from '../constants/playback-numeric-values.constant.js';
 import type { TrackTimestampedPlaybackItem } from '../types/track-timestamped-playback-item.type.js';
 import { PlaybackPacer } from '../services/playback-pacer.class.js';
-
 /**
- * Mirrors Scrypted's separate video and audio RTP schedulers. Video provides
+ * Paces audio and video tracks independently while respecting cancellation and queue bounds.
  * read-side pacing, while audio runs on its own serial lane and cannot block
  * an earlier video timestamp. Both lanes share the pacer's wall-clock origin.
  */
@@ -11,7 +11,7 @@ export async function runIndependentPlaybackTracks<T extends TrackTimestampedPla
   source: AsyncIterable<T>,
   send: (item: T) => Promise<void> | void,
   signal: AbortSignal,
-  maximumPendingAudioItems = 512,
+  maximumPendingAudioItems = PLAYBACK_CONSTANTS.maximumIndependentTrackQueue,
 ): Promise<void> {
   if (!Number.isSafeInteger(maximumPendingAudioItems) || maximumPendingAudioItems <= 0) {
     throw new RangeError('maximumPendingAudioItems must be a positive safe integer.');

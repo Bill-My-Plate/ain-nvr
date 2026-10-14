@@ -1,18 +1,19 @@
-
+import { RTSP_PARSER_CONSTANTS } from '../constants/rtsp-parser-numeric-values.constant.js';
 import { RtspParseError } from '../errors/rtsp-parse-error.class.js';
 
-
 import type { RtspStartLine } from '../types/rtsp-start-line.type.js';
-
+/**
+ * Parses an RTSP request or response start line.
+ */
 export function parseStartLine(value: string): RtspStartLine {
   const response = /^RTSP\/(\d+\.\d+) ([0-9]{3})(?: (.*))?$/u.exec(value);
   if (response !== null) {
-    const statusCode = Number(response[2]);
+    const statusCode = Number(response[RTSP_PARSER_CONSTANTS.rtspStatusCodeGroup]);
     return {
       type: 'response',
       version: `RTSP/${response[1]}`,
       statusCode,
-      statusMessage: response[3] ?? '',
+      statusMessage: response[RTSP_PARSER_CONSTANTS.rtspStatusMessageGroup] ?? '',
     };
   }
 
@@ -21,8 +22,8 @@ export function parseStartLine(value: string): RtspStartLine {
     return {
       type: 'request',
       method: request[1] ?? '',
-      uri: request[2] ?? '',
-      version: `RTSP/${request[3]}`,
+      uri: request[RTSP_PARSER_CONSTANTS.rtspRequestUriGroup] ?? '',
+      version: `RTSP/${request[RTSP_PARSER_CONSTANTS.rtspRequestVersionGroup]}`,
     };
   }
 

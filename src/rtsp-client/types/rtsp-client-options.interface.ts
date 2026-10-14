@@ -1,17 +1,16 @@
 import { type Socket } from 'node:net';
-
 /** Options for an RTSP camera connection. */
 export interface RtspClientOptions {
   /** RTSP or RTSPS camera URL; optional user information supplies credentials. */
   readonly url: string;
-  /** Maximum TCP or TLS connection time in milliseconds. */
+  /** Connect timeout in milliseconds. */
   readonly connectTimeoutMs?: number;
-  /** Maximum wait for each RTSP response in milliseconds. */
+  /** Request timeout in milliseconds. */
   readonly requestTimeoutMs?: number;
-  /** Optional session keepalive interval in milliseconds. */
+  /** Keepalive interval in milliseconds. */
   readonly keepaliveIntervalMs?: number;
-  /** Maximum silence on negotiated RTP channels in milliseconds. */
+  /** Media timeout in milliseconds. */
   readonly mediaTimeoutMs?: number;
-  /** Optional creator for a custom or test socket. */
+  /** Factory for the TCP or TLS socket used by this RTSP client. */
   readonly socketFactory?: (port: number, host: string) => Socket;
 }

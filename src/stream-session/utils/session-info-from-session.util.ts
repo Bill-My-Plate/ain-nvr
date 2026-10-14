@@ -1,25 +1,22 @@
-
-
-
 import type { TrackDescription } from '../../media/index.js';
 
 import { createH264CodecConfiguration } from '../../h264/index.js';
 
-
-
 import { type RtspClientSession } from '../../rtsp-client/index.js';
-
 
 import type { RtspSessionTrackInfo } from '../types/rtsp-session-track-info.type.js';
 import type { RtspSessionInfo } from '../types/rtsp-session-info.interface.js';
 import { parseFmtp } from './parse-fmtp.util.js';
-
+import { H264_PARAMETER_SET_COUNT } from '../constants/h264-parameter-set-count.constant.js';
+/** Converts a negotiated client session into the stable track details exposed to subscribers. */
 export function sessionInfoFromSession(session: RtspClientSession): RtspSessionInfo {
   const fmtp = session.video.media.fmtp.get(session.video.rtpMap.payloadType);
   let parameterSets: TrackDescription['parameterSets'];
   const encoded = parseFmtp(fmtp).get('sprop-parameter-sets')?.split(',');
-  if (encoded !== undefined && encoded.length >= 2) {
+  if (encoded !== undefined && encoded.length >= H264_PARAMETER_SET_COUNT) {
     try {
+      // SDP contains base64 SPS and PPS NAL units; malformed values are ignored
+      // because in-band parameter sets can still configure the decoder.
       const configuration = createH264CodecConfiguration(
         Buffer.from(encoded[0] ?? '', 'base64'),
         Buffer.from(encoded[1] ?? '', 'base64'),

@@ -1,3 +1,4 @@
+import { RECORDING_PARSER_CONSTANTS } from '../constants/recording-parser-numeric-values.constant.js';
 import type { MediaPacket } from '../../media/index.js';
 
 import { H264ConfigurationTracker } from '../../h264/index.js';
@@ -16,7 +17,9 @@ import type { PendingSafeAccessUnit } from '../types/pending-safe-access-unit.ty
 import type { DiscontinuityReason } from '../types/discontinuity-reason.type.js';
 import { TrackIndexer } from './track-indexer.class.js';
 import { serializeInterleavedFrame } from '../utils/serialize-interleaved-frame.util.js';
-
+/**
+ * Reorders live packets and produces recording writes and index events.
+ */
 export class RecordingParser<TLocation> {
   private readonly indexers = new Map<string, TrackIndexer<TLocation>>();
   private readonly reorder = new Map<string, RtpReorderBuffer<MediaPacket>>();
@@ -37,13 +40,17 @@ export class RecordingParser<TLocation> {
     lostPackets: 0,
     discontinuities: 0,
   };
-
-  constructor(private readonly options: RecordingParserOptions) {
-    const window = options.reorderWindowPackets ?? 4;
+  /**
+   * Creates the instance and initializes its state.
+   */
+  public constructor(private readonly options: RecordingParserOptions) {
+    const window =
+      options.reorderWindowPackets ?? RECORDING_PARSER_CONSTANTS.defaultReorderWindowPackets;
     if (!Number.isSafeInteger(window) || window <= 0) {
       throw new RangeError('reorderWindowPackets must be a positive safe integer.');
     }
-    this.playpointIntervalMs = options.playpointIntervalMs ?? 2_000;
+    this.playpointIntervalMs =
+      options.playpointIntervalMs ?? RECORDING_PARSER_CONSTANTS.defaultPlaypointIntervalMs;
     if (!Number.isSafeInteger(this.playpointIntervalMs) || this.playpointIntervalMs <= 0) {
       throw new RangeError('playpointIntervalMs must be a positive safe integer.');
     }
@@ -55,11 +62,12 @@ export class RecordingParser<TLocation> {
       throw new Error('decoderSafeBoundaries requires an H.264 video track.');
     }
     this.safeVideoTrackId = safeVideoTrack?.trackId;
-    this.safeConfigurationTracker = safeVideoTrack === undefined
-      ? undefined
-      : new H264ConfigurationTracker();
-    if (safeVideoTrack?.parameterSets !== undefined
-      && this.safeConfigurationTracker !== undefined) {
+    this.safeConfigurationTracker =
+      safeVideoTrack === undefined ? undefined : new H264ConfigurationTracker();
+    if (
+      safeVideoTrack?.parameterSets !== undefined &&
+      this.safeConfigurationTracker !== undefined
+    ) {
       try {
         this.safeConfigurationTracker.seed(
           safeVideoTrack.parameterSets.sps,
@@ -78,15 +86,26 @@ export class RecordingParser<TLocation> {
     }
   }
 
-  get status(): RecordingParserStatus {
+  /**
+   * Returns a snapshot of the current status.
+   */
+  public get status(): RecordingParserStatus {
     return { ...this.mutableStatus };
   }
 
-  requestBoundary(): void {
+  /**
+   * Request Boundary.
+   */
+  public requestBoundary(): void {
     this.boundaryPending = true;
   }
 
-  async process(
+  /**
+   * Reorders one live packet and writes packets that are ready in sequence.
+   * A source or timestamp discontinuity first flushes the old window, then
+   * requests a new recording boundary before accepting the new packet.
+   */
+  public async process(
     packet: MediaPacket,
     writer: RecordingPacketWriter<TLocation>,
   ): Promise<readonly RecordingIndexEvent<TLocation>[]> {
@@ -111,10 +130,15 @@ export class RecordingParser<TLocation> {
         lostPackets: this.mutableStatus.lostPackets + flushed.lost,
       };
       for (const ordered of flushed.packets) {
-        events.push(...await this.writeWithBoundaryPolicy({
-          packet: ordered.value,
-          lostBefore: ordered.lostBefore,
-        }, writer));
+        events.push(
+          ...(await this.writeWithBoundaryPolicy(
+            {
+              packet: ordered.value,
+              lostBefore: ordered.lostBefore,
+            },
+            writer,
+          )),
+        );
       }
       reorder.reset();
       this.boundaryPending = true;
@@ -134,16 +158,24 @@ export class RecordingParser<TLocation> {
       lostPackets: this.mutableStatus.lostPackets + result.lost,
     };
     for (const ordered of result.packets) {
-      const orderedEvents = await this.writeWithBoundaryPolicy({
-        packet: ordered.value,
-        lostBefore: ordered.lostBefore,
-      }, writer);
+      const orderedEvents = await this.writeWithBoundaryPolicy(
+        {
+          packet: ordered.value,
+          lostBefore: ordered.lostBefore,
+        },
+        writer,
+      );
       events.push(...orderedEvents);
     }
     return events;
   }
 
-  async flush(writer: RecordingPacketWriter<TLocation>): Promise<readonly RecordingIndexEvent<TLocation>[]> {
+  /**
+   * Emits buffered work and clears pending state.
+   */
+  public async flush(
+    writer: RecordingPacketWriter<TLocation>,
+  ): Promise<readonly RecordingIndexEvent<TLocation>[]> {
     const events: RecordingIndexEvent<TLocation>[] = [];
     for (const reorder of this.reorder.values()) {
       const result = reorder.flush();
@@ -152,14 +184,19 @@ export class RecordingParser<TLocation> {
         lostPackets: this.mutableStatus.lostPackets + result.lost,
       };
       for (const ordered of result.packets) {
-        events.push(...await this.writeWithBoundaryPolicy({
-          packet: ordered.value,
-          lostBefore: ordered.lostBefore,
-        }, writer));
+        events.push(
+          ...(await this.writeWithBoundaryPolicy(
+            {
+              packet: ordered.value,
+              lostBefore: ordered.lostBefore,
+            },
+            writer,
+          )),
+        );
       }
     }
     if (this.decoderSafeBoundaries && this.pendingSafeAccessUnit !== undefined) {
-      events.push(...await this.resolveSafeAccessUnit(writer));
+      events.push(...(await this.resolveSafeAccessUnit(writer)));
     }
     for (const indexer of this.indexers.values()) {
       events.push(...indexer.finishPending());
@@ -167,6 +204,9 @@ export class RecordingParser<TLocation> {
     return events;
   }
 
+  /**
+   * Writes with Boundary Policy.
+   */
   private async writeWithBoundaryPolicy(
     input: OrderedInput,
     writer: RecordingPacketWriter<TLocation>,
@@ -176,10 +216,11 @@ export class RecordingParser<TLocation> {
     }
 
     const packet = input.packet;
-    const isVideoRtp = packet.track?.trackId === this.safeVideoTrackId
-      && packet.rtp !== undefined;
+    const isVideoRtp = packet.track?.trackId === this.safeVideoTrackId && packet.rtp !== undefined;
     const events: RecordingIndexEvent<TLocation>[] = [];
 
+    // A safe segment cannot start on audio or a partial video unit. Hold
+    // non-video packets while the candidate IDR is being assembled.
     if (!isVideoRtp) {
       if (this.pendingSafeAccessUnit !== undefined) {
         this.bufferSafePacket(this.pendingSafeAccessUnit, input);
@@ -192,15 +233,19 @@ export class RecordingParser<TLocation> {
     }
 
     const rtp = packet.rtp as RtpPacket;
-    if (this.pendingSafeAccessUnit !== undefined
-      && this.pendingSafeAccessUnit.timestamp !== rtp.timestamp) {
-      events.push(...await this.resolveSafeAccessUnit(writer));
+    if (
+      this.pendingSafeAccessUnit !== undefined &&
+      this.pendingSafeAccessUnit.timestamp !== rtp.timestamp
+    ) {
+      events.push(...(await this.resolveSafeAccessUnit(writer)));
       if (!this.boundaryPending) {
-        events.push(...await this.writeOrdered(input, writer));
+        events.push(...(await this.writeOrdered(input, writer)));
         return events;
       }
     }
 
+    // Gather all RTP fragments with the same timestamp and inspect them as one
+    // access unit before deciding whether this boundary can be written.
     this.pendingSafeAccessUnit ??= {
       timestamp: rtp.timestamp,
       packets: [],
@@ -222,7 +267,7 @@ export class RecordingParser<TLocation> {
         this.safeHasConfiguration = true;
         events.push({
           type: 'configuration',
-          trackId: packet.track?.trackId ?? this.safeVideoTrackId as string,
+          trackId: packet.track?.trackId ?? (this.safeVideoTrackId as string),
           configuration,
         });
       }
@@ -245,20 +290,32 @@ export class RecordingParser<TLocation> {
       pending.damaged = true;
     }
 
-    if (rtp.marker) events.push(...await this.resolveSafeAccessUnit(writer));
+    if (rtp.marker) events.push(...(await this.resolveSafeAccessUnit(writer)));
     return events;
   }
 
+  /**
+   * Buffer Safe Packet.
+   */
   private bufferSafePacket(pending: PendingSafeAccessUnit, input: OrderedInput): void {
     pending.bytes += input.packet.rawInterleavedFrame.length;
-    if (pending.bytes > 8 * 1024 * 1024 || pending.packets.length >= 4_096) {
+    if (
+      pending.bytes > RECORDING_PARSER_CONSTANTS.maximumPendingBytes ||
+      pending.packets.length >= RECORDING_PARSER_CONSTANTS.maximumPendingPackets
+    ) {
       this.pendingSafeAccessUnit = undefined;
       this.safeConfigurationTracker?.resetFragments();
-      throw new AinNvrError('corrupt_media', 'Incomplete recording access unit exceeded its buffer limit.');
+      throw new AinNvrError(
+        'corrupt_media',
+        'Incomplete recording access unit exceeded its buffer limit.',
+      );
     }
     pending.packets.push(input);
   }
 
+  /**
+   * Resolve Safe Access Unit.
+   */
   private async resolveSafeAccessUnit(
     writer: RecordingPacketWriter<TLocation>,
   ): Promise<RecordingIndexEvent<TLocation>[]> {
@@ -266,14 +323,15 @@ export class RecordingParser<TLocation> {
     this.pendingSafeAccessUnit = undefined;
     if (pending === undefined) return [];
 
-    const decoderSafe = this.safeHasConfiguration
-      && pending.hasIdr
-      && !pending.damaged
-      && pending.fuNalType === undefined;
+    const decoderSafe =
+      this.safeHasConfiguration &&
+      pending.hasIdr &&
+      !pending.damaged &&
+      pending.fuNalType === undefined;
     const events: RecordingIndexEvent<TLocation>[] = [];
     if (decoderSafe) {
       for (const input of pending.packets) {
-        events.push(...await this.writeOrdered(input, writer));
+        events.push(...(await this.writeOrdered(input, writer)));
       }
       this.safeBoundaryWritten = true;
       return events;
@@ -281,11 +339,14 @@ export class RecordingParser<TLocation> {
 
     if (!this.safeBoundaryWritten) return events;
     for (const input of pending.packets) {
-      events.push(...await this.writeBeforePendingBoundary(input, writer));
+      events.push(...(await this.writeBeforePendingBoundary(input, writer)));
     }
     return events;
   }
 
+  /**
+   * Writes before Pending Boundary.
+   */
   private async writeBeforePendingBoundary(
     input: OrderedInput,
     writer: RecordingPacketWriter<TLocation>,
@@ -305,15 +366,16 @@ export class RecordingParser<TLocation> {
     }
   }
 
+  /**
+   * Writes ordered.
+   */
   private async writeOrdered(
     input: OrderedInput,
     writer: RecordingPacketWriter<TLocation>,
   ): Promise<RecordingIndexEvent<TLocation>[]> {
     const boundaryBefore = this.boundaryPending;
     const discontinuityBefore = boundaryBefore && this.boundaryIsDiscontinuity;
-    const discontinuityReason = discontinuityBefore
-      ? this.pendingDiscontinuityReason
-      : undefined;
+    const discontinuityReason = discontinuityBefore ? this.pendingDiscontinuityReason : undefined;
     const events: RecordingIndexEvent<TLocation>[] = [];
     if (boundaryBefore) {
       for (const indexer of this.indexers.values()) {
@@ -338,7 +400,13 @@ export class RecordingParser<TLocation> {
     this.boundaryIsDiscontinuity = false;
     this.pendingDiscontinuityReason = undefined;
 
-    let packetEvent: Extract<RecordingIndexEvent<TLocation>, { type: 'packet' }> = {
+    let packetEvent: Extract<
+      RecordingIndexEvent<TLocation>,
+      {
+        /** Discriminant for this packet or event variant. */
+        type: 'packet';
+      }
+    > = {
       type: 'packet',
       location,
       ...(input.packet.track === undefined ? {} : { trackId: input.packet.track.trackId }),
@@ -367,8 +435,10 @@ export class RecordingParser<TLocation> {
       });
     }
     events.push(...inspected.events);
-    if (track.mediaType === 'video'
-      && (this.nextPlaypointMs === undefined || inspected.timeMs >= this.nextPlaypointMs)) {
+    if (
+      track.mediaType === 'video' &&
+      (this.nextPlaypointMs === undefined || inspected.timeMs >= this.nextPlaypointMs)
+    ) {
       events.push({ type: 'playpoint', location, timeMs: inspected.timeMs });
       this.nextPlaypointMs = inspected.timeMs + this.playpointIntervalMs;
     }

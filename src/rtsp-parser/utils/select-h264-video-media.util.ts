@@ -1,10 +1,17 @@
 import type { SdpRtpMap } from '../types/sdp-rtp-map.interface.js';
 import type { SdpMediaDescription } from '../types/sdp-media-description.interface.js';
 import type { SdpDescription } from '../types/sdp-description.interface.js';
-
-export function selectH264VideoMedia(
-  description: SdpDescription,
-): { media: SdpMediaDescription; rtpMap: SdpRtpMap } | undefined {
+/**
+ * Selects an SDP video track with a supported H.264 RTP mapping.
+ */
+export function selectH264VideoMedia(description: SdpDescription):
+  | {
+      /** SDP media section selected for this codec. */
+      media: SdpMediaDescription;
+      /** RTP payload mapping selected from the SDP media section. */
+      rtpMap: SdpRtpMap;
+    }
+  | undefined {
   for (const media of description.media) {
     if (media.mediaType.toLowerCase() !== 'video') {
       continue;

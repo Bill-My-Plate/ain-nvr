@@ -1,5 +1,4 @@
 import type { H264Packetization } from './h264-packetization.type.js';
-
 /** Structure found in one complete H.264 RTP payload. */
 export interface H264PayloadInspection {
   /** Single NAL, STAP-A aggregation, or FU-A fragmentation. */

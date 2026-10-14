@@ -1,3 +1,6 @@
+/**
+ * Splits an SDP attribute into its name and optional value.
+ */
 export function parseAttribute(line: string): readonly [string, string] {
   const separator = line.indexOf(':');
   return separator < 0

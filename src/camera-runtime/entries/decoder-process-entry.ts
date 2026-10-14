@@ -1,10 +1,13 @@
+import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-values.constant.js';
 import { RtspUrlFrameExtractor } from '../../frame-extractor/index.js';
 import { createScryptedLibavRuntime } from '../../frame-extractor/index.js';
 import { deferred } from '../utils/deferred.util.js';
 import { serializeError } from '../utils/serialize-error.util.js';
 import type { DecoderCommand } from '../types/decoder-command.type.js';
 import type { DecoderMessage } from '../types/decoder-message.type.js';
-
+/**
+ * Start Decoder Process Entry.
+ */
 function startDecoderProcessEntry(): void {
   // @scrypted/libav 1.0.212 uses cross-isolate native state: concurrent thread
   // decoders can abort V8. Keep the addon in a separate process, even for one camera.
@@ -15,11 +18,18 @@ function startDecoderProcessEntry(): void {
   let stopping = false;
   let errors = 0;
   const send = (message: DecoderMessage): void => {
-    if (process.connected) process.send?.(message, error => { if (error) process.exit(1); });
+    if (process.connected)
+      process.send?.(message, (error) => {
+        if (error) process.exit(1);
+      });
   };
   process.on('disconnect', () => process.exit(0));
   process.on('message', (command: DecoderCommand) => {
-    if (command.type === 'ack') { pending?.resolve(); pending = undefined; return; }
+    if (command.type === 'ack') {
+      pending?.resolve();
+      pending = undefined;
+      return;
+    }
     if (command.type === 'stop') {
       stopping = true;
       pending?.resolve();
@@ -30,24 +40,29 @@ function startDecoderProcessEntry(): void {
     if (command.type !== 'start' || starting) return;
     starting = true;
     void (async () => {
-      if (!command.url.startsWith('rtsp://127.0.0.1:')) throw new Error('Decoder requires the private loopback bridge.');
+      if (!command.url.startsWith('rtsp://127.0.0.1:'))
+        throw new Error('Decoder requires the private loopback bridge.');
       const runtime = createScryptedLibavRuntime({ install: false });
       await runtime.initialize();
       if (stopping) return;
       extractor = new RtspUrlFrameExtractor({
-        id: command.cameraId, url: command.url, runtime, ...command.profile,
-        onFrame: async frame => {
+        id: command.cameraId,
+        url: command.url,
+        runtime,
+        ...command.profile,
+        onFrame: async (frame) => {
           if (stopping) return;
-          if (frame.data.length > command.maximumFrameBytes) throw new Error('JPEG exceeds maximumFrameBytes.');
+          if (frame.data.length > command.maximumFrameBytes)
+            throw new Error('JPEG exceeds maximumFrameBytes.');
           errors = 0;
           pending = deferred<void>();
           send({ type: 'frame', frame });
           await pending.promise;
         },
-        onError: error => {
+        onError: (error) => {
           if (stopping) return;
           // The extractor retries its local decoder; upstream retry stays in the camera worker.
-          if (++errors >= 3) {
+          if (++errors >= CAMERA_RUNTIME_CONSTANTS.maximumDecoderErrors) {
             send({ type: 'error', error: serializeError(error) });
             process.exitCode = 1;
             void extractor?.stop().finally(() => process.exit(1));
@@ -56,7 +71,7 @@ function startDecoderProcessEntry(): void {
       });
       extractor.start();
       send({ type: 'ready' });
-    })().catch(error => {
+    })().catch((error) => {
       send({ type: 'error', error: serializeError(error) });
       process.exitCode = 1;
       process.disconnect?.();

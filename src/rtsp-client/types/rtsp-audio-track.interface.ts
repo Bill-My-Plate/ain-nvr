@@ -1,5 +1,4 @@
 import { type SdpMediaDescription, type SdpRtpMap } from '../../rtsp-parser/index.js';
-
 /** Negotiated optional G.711 audio track and its TCP channels. */
 export interface RtspAudioTrack {
   /** Selected G.711 encoding, PCMU or PCMA. */

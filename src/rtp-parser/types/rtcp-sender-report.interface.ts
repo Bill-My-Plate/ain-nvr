@@ -14,8 +14,8 @@ export interface RtcpSenderReport {
   readonly senderPacketCount: number;
   /** Total RTP payload bytes sent, excluding RTP headers and padding. */
   readonly senderOctetCount: number;
-  /** Number of reception report blocks following the sender information. */
+  /** Number of reception report blocks declared in the RTCP header. */
   readonly reportCount: number;
-  /** Declared length of this RTCP packet in bytes, including its header. */
+  /** RTCP packet length in bytes after decoding the 32-bit-word count. */
   readonly packetLength: number;
 }

@@ -1,3 +1,6 @@
+/**
+ * Error codes emitted by shared.
+ */
 export type AinNvrErrorCode =
   | 'rtsp_authentication_failed'
   | 'rtsp_unsupported_transport'

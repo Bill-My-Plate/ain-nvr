@@ -1,3 +1,6 @@
+/**
+ * Error codes emitted by rtsp parser.
+ */
 export type RtspParseErrorCode =
   | 'incomplete_input'
   | 'interleaved_packet_too_large'

@@ -1,17 +1,18 @@
-
-
-
-
-
-
+/**
+ * Waits for a reconnect delay and rejects promptly on cancellation.
+ */
 export function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.reject(signal.reason);
   return new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(resolve, milliseconds);
     timeout.unref();
-    signal.addEventListener('abort', () => {
-      clearTimeout(timeout);
-      reject(signal.reason);
-    }, { once: true });
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timeout);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
   });
 }

@@ -1,13 +1,12 @@
+import { RECORDED_STREAM_CONSTANTS } from '../constants/recorded-stream-parser-numeric-values.constant.js';
 import type { TrackDescription } from '../../media/index.js';
-
-
-
-
 
 import type { ClockAnchor } from '../types/clock-anchor.interface.js';
 import type { RecordedSegmentDescriptor } from '../types/recorded-segment-descriptor.interface.js';
 import { signedTimestampDelta } from './signed-timestamp-delta.util.js';
-
+/**
+ * Maps a recorded RTP timestamp to Unix time using segment clock anchors.
+ */
 export function wallClockTime(
   segment: RecordedSegmentDescriptor,
   track: TrackDescription,
@@ -23,6 +22,8 @@ export function wallClockTime(
   }
   return anchor === undefined
     ? segment.startTimeMs
-    : anchor.timeMs
-      + signedTimestampDelta(rtpTimestamp, anchor.rtpTimestamp) * 1000 / track.clockRate;
+    : anchor.timeMs +
+        (signedTimestampDelta(rtpTimestamp, anchor.rtpTimestamp) *
+          RECORDED_STREAM_CONSTANTS.millisecondsPerSecond) /
+          track.clockRate;
 }

@@ -1,5 +1,4 @@
 import { type SdpMediaDescription, type SdpRtpMap } from '../../rtsp-parser/index.js';
-
 /** Negotiated H.264 video track and its TCP channels. */
 export interface RtspVideoTrack {
   /** SDP media description advertising this track. */

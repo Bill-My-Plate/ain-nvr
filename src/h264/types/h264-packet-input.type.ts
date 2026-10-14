@@ -1,8 +1,4 @@
-
-
 import type { RtpPacket } from '../../rtp-parser/index.js';
-
-
 /** One parsed, ordered video RTP packet and its caller-supplied context. */
 export type H264PacketInput = {
   /** Parsed RTP header and H.264 payload. */

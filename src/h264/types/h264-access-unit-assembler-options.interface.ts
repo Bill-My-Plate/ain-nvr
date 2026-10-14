@@ -1,8 +1,4 @@
-
 import { type H264ParameterSets } from './h264-parameter-sets.type.js';
-
-
-
 /** Stream parameters and optional decoder bootstrap for access-unit assembly. */
 export interface H264AccessUnitAssemblerOptions {
   /** Expected 7-bit RTP payload type; packets with another type are ignored. */

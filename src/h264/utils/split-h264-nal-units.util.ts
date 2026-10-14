@@ -1,12 +1,9 @@
-
-
-
 import { findStartCodes } from './find-start-codes.util.js';
-
 /**
  * Return raw H.264 NAL units without Annex-B start codes. Input may be one raw
  * NAL, a sequence delimited by 00 00 01 or 00 00 00 01, or the camera form
  * `raw NAL | start code | NAL` seen inside non-standard FU-A data.
+ * @param data Variable-length H.264 access unit containing three- or four-byte Annex B start codes or length-prefixed NAL units.
  */
 export function splitH264NalUnits(data: Buffer): Buffer[] {
   if (data.length === 0) return [];

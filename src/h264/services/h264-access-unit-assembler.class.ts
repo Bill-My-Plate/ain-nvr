@@ -14,7 +14,6 @@ import { annexB } from '../utils/annex-b.util.js';
 import { H264_NAL_LAYOUT } from '../constants/h264-nal-layout.constant.js';
 import { H264_ASSEMBLY_LIMITS } from '../constants/h264-assembly-limits.constant.js';
 import { H264NalType } from '../types/h264-nal-type.enum.js';
-
 /**
  * Group ordered H.264 RTP payloads by timestamp into decoder-ready Annex-B
  * access units. Reassemble FU-A fragments, track SPS/PPS, and wait for an IDR
@@ -33,11 +32,13 @@ export class H264AccessUnitAssembler {
 
   droppedAccessUnits = 0;
   sawCompleteIdr = false;
-
   /** Validate stream timing and optionally seed SPS/PPS from SDP parameter sets. */
-  constructor(private readonly options: H264AccessUnitAssemblerOptions) {
-    if (!Number.isInteger(options.payloadType) || options.payloadType < 0
-      || options.payloadType > H264_ASSEMBLY_LIMITS.maximumRtpPayloadType) {
+  public constructor(private readonly options: H264AccessUnitAssemblerOptions) {
+    if (
+      !Number.isInteger(options.payloadType) ||
+      options.payloadType < 0 ||
+      options.payloadType > H264_ASSEMBLY_LIMITS.maximumRtpPayloadType
+    ) {
       throw new RangeError(
         `payloadType must be between 0 and ${H264_ASSEMBLY_LIMITS.maximumRtpPayloadType}.`,
       );
@@ -95,8 +96,10 @@ export class H264AccessUnitAssembler {
     if (pending.overflowed) return output;
     // Keep an oversized unit marked until its timestamp changes, then drop it.
     pending.bytes += rtp.payload.length;
-    if (pending.bytes > H264_ASSEMBLY_LIMITS.maximumAccessUnitPayloadBytes
-      || ++pending.packets > H264_ASSEMBLY_LIMITS.maximumAccessUnitPackets) {
+    if (
+      pending.bytes > H264_ASSEMBLY_LIMITS.maximumAccessUnitPayloadBytes ||
+      ++pending.packets > H264_ASSEMBLY_LIMITS.maximumAccessUnitPackets
+    ) {
       pending.overflowed = true;
       pending.damaged = true;
       pending.nalUnits.length = 0;
@@ -133,8 +136,11 @@ export class H264AccessUnitAssembler {
         // header, append fragment bodies, and expose NALs only at the end flag.
         const nalType = inspection.nalTypes[0] ?? 0;
         if (inspection.fuStart) {
-          if (pending.fu !== undefined || inspection.reconstructedFuHeader === undefined
-            || inspection.fuPayload === undefined) {
+          if (
+            pending.fu !== undefined ||
+            inspection.reconstructedFuHeader === undefined ||
+            inspection.fuPayload === undefined
+          ) {
             pending.damaged = true;
           } else {
             pending.fu = {
@@ -142,8 +148,11 @@ export class H264AccessUnitAssembler {
               chunks: [Buffer.from([inspection.reconstructedFuHeader]), inspection.fuPayload],
             };
           }
-        } else if (pending.fu === undefined || pending.fu.nalType !== nalType
-          || inspection.fuPayload === undefined) {
+        } else if (
+          pending.fu === undefined ||
+          pending.fu.nalType !== nalType ||
+          inspection.fuPayload === undefined
+        ) {
           pending.damaged = true;
         } else {
           pending.fu.chunks.push(inspection.fuPayload);
@@ -195,7 +204,10 @@ export class H264AccessUnitAssembler {
     }
   }
 
-  /** Remember an SPS or PPS from one raw NAL without its Annex-B start code. */
+  /**
+   * Remember an SPS or PPS from one raw NAL without its Annex-B start code.
+   * @param nal One complete SPS or PPS NAL: the first byte contains forbidden, priority, and NAL-type bits; the remaining variable-length bytes contain the parameter set.
+   */
   private captureParameterSet(nal: Buffer): void {
     const type = (nal[H264_NAL_LAYOUT.headerByteOffset] ?? 0) & H264_NAL_LAYOUT.typeMask;
     if (type === H264NalType.Sps) this.sps = Buffer.from(nal);
@@ -230,10 +242,16 @@ export class H264AccessUnitAssembler {
 
     // Delta pictures depend on an earlier IDR; an IDR needs SPS/PPS to start
     // a decoder, so neither can be emitted before those prerequisites exist.
-    const key = pending.nalUnits.some((nal) => ((nal[H264_NAL_LAYOUT.headerByteOffset] ?? 0)
-      & H264_NAL_LAYOUT.typeMask) === H264NalType.IdrSlice);
+    const key = pending.nalUnits.some(
+      (nal) =>
+        ((nal[H264_NAL_LAYOUT.headerByteOffset] ?? 0) & H264_NAL_LAYOUT.typeMask) ===
+        H264NalType.IdrSlice,
+    );
     if (key) this.sawCompleteIdr = true;
-    if ((!this.decoderStarted && !key) || (key && (this.sps === undefined || this.pps === undefined))) {
+    if (
+      (!this.decoderStarted && !key) ||
+      (key && (this.sps === undefined || this.pps === undefined))
+    ) {
       this.droppedAccessUnits += 1;
       return undefined;
     }
@@ -251,15 +269,21 @@ export class H264AccessUnitAssembler {
     this.timestampOrigin ??= pending.unwrappedTimestamp;
     // Live playback uses relative RTP ticks; recorded playback can instead
     // use the caller's wall-clock origin. Both outputs are microseconds.
-    const timestampUs = this.options.playbackStartTimeMs === undefined
-      ? Number(rtpTicksToMicroseconds(
-        pending.unwrappedTimestamp - this.timestampOrigin,
-        this.options.clockRate,
-      ))
-      : Math.max(0, Math.round(
-        (pending.wallClockTimeMs - this.options.playbackStartTimeMs)
-          * H264_ASSEMBLY_LIMITS.microsecondsPerMillisecond,
-      ));
+    const timestampUs =
+      this.options.playbackStartTimeMs === undefined
+        ? Number(
+            rtpTicksToMicroseconds(
+              pending.unwrappedTimestamp - this.timestampOrigin,
+              this.options.clockRate,
+            ),
+          )
+        : Math.max(
+            0,
+            Math.round(
+              (pending.wallClockTimeMs - this.options.playbackStartTimeMs) *
+                H264_ASSEMBLY_LIMITS.microsecondsPerMillisecond,
+            ),
+          );
     if (!Number.isSafeInteger(timestampUs) || timestampUs < 0) {
       this.droppedAccessUnits += 1;
       return undefined;

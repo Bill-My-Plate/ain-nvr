@@ -1,6 +1,5 @@
 import { inspectH264Payload } from '../utils/inspect-h264-payload.util.js';
 
-
 import type { H264CodecConfiguration } from '../types/h264-codec-configuration.interface.js';
 import type { FuAssembly } from '../types/h264-configuration-fu-assembly.type.js';
 import { splitH264NalUnits } from '../utils/split-h264-nal-units.util.js';
@@ -8,7 +7,6 @@ import { createH264CodecConfiguration } from '../utils/create-h264-codec-configu
 import { H264_NAL_LAYOUT } from '../constants/h264-nal-layout.constant.js';
 import { H264_ASSEMBLY_LIMITS } from '../constants/h264-assembly-limits.constant.js';
 import { H264NalType } from '../types/h264-nal-type.enum.js';
-
 /**
  * Learn SPS/PPS NALs from H.264 RTP payloads and report a valid configuration
  * only when its SPS/PPS pair differs from the last reported pair.
@@ -18,8 +16,11 @@ export class H264ConfigurationTracker {
   private pps: Buffer | undefined;
   private fu: FuAssembly | undefined;
   private lastSignature: string | undefined;
-
-  /** Start from raw or Annex-B SPS/PPS buffers, typically supplied by SDP. */
+  /**
+   * Start from raw or Annex-B SPS/PPS buffers, typically supplied by SDP.
+   * @param spsData One complete parameter-set NAL, with its one-byte NAL header followed by variable-length encoded data. `spsData` has type 7 and `ppsData` has type 8.
+   * @param ppsData One complete parameter-set NAL, with its one-byte NAL header followed by variable-length encoded data. `spsData` has type 7 and `ppsData` has type 8.
+   */
   public seed(spsData: Buffer, ppsData: Buffer): H264CodecConfiguration {
     const configuration = createH264CodecConfiguration(spsData, ppsData);
     this.sps = configuration.sps;
@@ -32,6 +33,7 @@ export class H264ConfigurationTracker {
    * Inspect one H.264 RTP payload after the RTP header. Single NAL and STAP-A
    * payloads contain whole NALs; FU-A payloads are gathered across packets
    * with the same timestamp before SPS/PPS are inspected.
+   * @param payload One complete H.264 RTP payload: a single NAL, a STAP-A indicator plus two-byte length-prefixed NALs, or an FU-A indicator/header plus fragment bytes.
    */
   public push(payload: Buffer, timestamp: number): H264CodecConfiguration | undefined {
     let inspection;
@@ -49,21 +51,31 @@ export class H264ConfigurationTracker {
       // A new FU start replaces prior fragments. Later pieces must match the
       // timestamp and NAL type, and must stay within the reassembly limits.
       const nalType = inspection.nalTypes[0] ?? 0;
-      if (inspection.fuStart && inspection.reconstructedFuHeader !== undefined
-        && inspection.fuPayload !== undefined) {
+      if (
+        inspection.fuStart &&
+        inspection.reconstructedFuHeader !== undefined &&
+        inspection.fuPayload !== undefined
+      ) {
         this.fu = {
           timestamp,
           nalType,
           chunks: [Buffer.from([inspection.reconstructedFuHeader]), inspection.fuPayload],
           bytes: H264_NAL_LAYOUT.headerBytes + inspection.fuPayload.length,
         };
-      } else if (this.fu === undefined || this.fu.timestamp !== timestamp
-        || this.fu.nalType !== nalType || inspection.fuPayload === undefined) {
+      } else if (
+        this.fu === undefined ||
+        this.fu.timestamp !== timestamp ||
+        this.fu.nalType !== nalType ||
+        inspection.fuPayload === undefined
+      ) {
         this.fu = undefined;
       } else {
         this.fu.bytes += inspection.fuPayload.length;
-        if (this.fu.bytes > H264_ASSEMBLY_LIMITS.maximumFuNalBytes
-          || this.fu.chunks.length >= H264_ASSEMBLY_LIMITS.maximumFuChunks) this.fu = undefined;
+        if (
+          this.fu.bytes > H264_ASSEMBLY_LIMITS.maximumFuNalBytes ||
+          this.fu.chunks.length >= H264_ASSEMBLY_LIMITS.maximumFuChunks
+        )
+          this.fu = undefined;
         else this.fu.chunks.push(inspection.fuPayload);
       }
       if (inspection.fuEnd && this.fu !== undefined) {
@@ -89,7 +101,10 @@ export class H264ConfigurationTracker {
     this.fu = undefined;
   }
 
-  /** Find SPS/PPS in one raw NAL or a bundle of Annex-B-delimited NALs. */
+  /**
+   * Find SPS/PPS in one raw NAL or a bundle of Annex-B-delimited NALs.
+   * @param data A variable-length H.264 parameter-set bundle. It may contain Annex B start codes (three or four bytes each) or length-delimited NAL data.
+   */
   private captureBundle(data: Buffer): void {
     for (const nal of splitH264NalUnits(data)) {
       const type = (nal[H264_NAL_LAYOUT.headerByteOffset] ?? 0) & H264_NAL_LAYOUT.typeMask;

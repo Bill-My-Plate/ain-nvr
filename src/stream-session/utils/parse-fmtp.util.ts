@@ -1,15 +1,4 @@
-
-
-
-
-
-
-
-
-
-
-
-
+/** Splits SDP fmtp parameters into lowercase keys and their original values. */
 export function parseFmtp(value: string | undefined): Map<string, string> {
   const result = new Map<string, string>();
   for (const field of value?.split(';') ?? []) {

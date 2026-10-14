@@ -1,10 +1,9 @@
 import type { H264ParameterSets } from '../../h264/index.js';
-
 /** Negotiated identity, format, and RTSP/TCP channels for one media track. */
 export interface TrackDescription {
   /** Logical track identifier used to match packets and recording index entries. */
   readonly trackId: string;
-  /** Whether the track carries video or audio. */
+  /** Audio or video kind declared by the SDP media section. */
   readonly mediaType: 'video' | 'audio';
   /** Codec carried by the track's RTP packets. */
   readonly codec: 'h264' | 'pcmu' | 'pcma';
@@ -16,6 +15,6 @@ export interface TrackDescription {
   readonly rtpChannel: number;
   /** RTSP interleaved TCP channel that carries RTCP packets. */
   readonly rtcpChannel: number;
-  /** Optional H.264 SPS and PPS NAL units obtained from SDP. */
+  /** H.264 SPS and PPS bytes used to initialize a decoder. */
   readonly parameterSets?: H264ParameterSets;
 }

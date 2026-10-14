@@ -1,0 +1,22 @@
+/** Named protocol fields, time units, and operational limits for recording-parser. */
+export const RECORDING_PARSER_CONSTANTS = {
+  rtpTimestampHalfRange: 0x8000_0000,
+  rtpTimestampRange: 0x1_0000_0000,
+  millisecondsPerSecond: 1_000,
+  maximumTimestampRegressionMs: 5_000,
+  maximumTimestampLeadMs: 30_000,
+  maximumClockAnchorSkewMs: 60_000,
+  defaultPlaypointIntervalMs: 2_000,
+  maximumPendingBytes: 8 * 1024 * 1024,
+  maximumPendingPackets: 4_096,
+  defaultPauseAtBytes: 8 * 1024 * 1024,
+  defaultResumeAtBytes: 4 * 1024 * 1024,
+  defaultMaximumQueuedBytes: 16 * 1024 * 1024,
+  defaultMaximumQueuedPackets: 4_096,
+  maximumInterleavedPayloadBytes: 65_535,
+  defaultReorderWindowPackets: 4,
+  clockAnchorArrivalWindowMultiplier: 5,
+  interleavedHeaderBytes: 4,
+  interleavedMarker: 0x24,
+  interleavedLengthOffset: 2,
+} as const;

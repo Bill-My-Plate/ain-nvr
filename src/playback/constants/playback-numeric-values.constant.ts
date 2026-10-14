@@ -1,0 +1,23 @@
+/** Named protocol fields, time units, and operational limits for playback. */
+export const PLAYBACK_CONSTANTS = {
+  microsecondsPerSecond: 1_000_000,
+  microsecondsPerMillisecond: 1_000,
+  defaultMaximumLookaheadUs: 1_000_000,
+  defaultMaximumGapMs: 5_000,
+  defaultMaximumBootstrapBytes: 64 * 1024 * 1024,
+  defaultMaximumBootstrapDurationMs: 30_000,
+  maximumPendingAudioUnits: 512,
+  maximumIndependentTrackQueue: 512,
+  g711SignMask: 0x80,
+  muLawByteMask: 0xff,
+  muLawBias: 0x84,
+  aLawBias: 0x108,
+  aLawAlternatingBitMask: 0x55,
+  g711ExponentShift: 4,
+  aLawMantissaShift: 4,
+  g711ExponentMask: 0x07,
+  g711MantissaMask: 0x0f,
+  aLawLowSegmentBias: 8,
+  muLawMantissaShift: 3,
+  pcmSampleBytes: 2,
+} as const;

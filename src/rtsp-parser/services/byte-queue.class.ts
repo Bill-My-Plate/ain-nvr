@@ -1,3 +1,4 @@
+import { RTSP_PARSER_CONSTANTS } from '../constants/rtsp-parser-numeric-values.constant.js';
 /**
  * Stores unread bytes in arrival order without joining incoming chunks.
  * headIndex/headOffset point to the first unread byte; byteLength counts all
@@ -11,11 +12,17 @@ export class ByteQueue {
   private headIndex = 0;
   private headOffset = 0;
   private byteLength = 0;
-
+  /**
+   * Returns the number of unread bytes in the queue.
+   */
   public get length(): number {
     return this.byteLength;
   }
 
+  /**
+   * Appends a TCP chunk to the queue without interpreting message boundaries.
+   * @param chunk Arbitrary bytes from the RTSP TCP stream; a chunk may contain part of a CRLF-delimited RTSP message or a `$` frame with a four-byte marker/channel/length prefix.
+   */
   public push(chunk: Buffer): void {
     if (chunk.length === 0) {
       return;
@@ -24,17 +31,16 @@ export class ByteQueue {
     this.byteLength += chunk.length;
   }
 
+  /**
+   * Peek Byte.
+   */
   public peekByte(index: number): number {
     if (!Number.isInteger(index) || index < 0 || index >= this.byteLength) {
-      throw new RangeError("Byte index is outside the queue.");
+      throw new RangeError('Byte index is outside the queue.');
     }
 
     let remaining = index;
-    for (
-      let chunkIndex = this.headIndex;
-      chunkIndex < this.chunks.length;
-      chunkIndex += 1
-    ) {
+    for (let chunkIndex = this.headIndex; chunkIndex < this.chunks.length; chunkIndex += 1) {
       const chunk = this.chunks[chunkIndex];
       if (chunk === undefined) {
         break;
@@ -45,17 +51,20 @@ export class ByteQueue {
       if (remaining < available) {
         const byte = chunk[start + remaining];
         if (byte === undefined) {
-          throw new Error("Byte queue invariant failed.");
+          throw new Error('Byte queue invariant failed.');
         }
         return byte;
       }
       remaining -= available;
     }
 
-    throw new Error("Byte queue length invariant failed.");
+    throw new Error('Byte queue length invariant failed.');
   }
 
-  /** Returns an offset from the first unread byte, searching at most maximumBytes. */
+  /**
+   * Finds a byte sequence within the allowed prefix of the queued data.
+   * @param sequence The complete variable-length byte pattern to locate, such as the four-byte CRLF CRLF header terminator; it is not a whole RTSP message.
+   */
   public indexOf(sequence: Buffer, maximumBytes = this.byteLength): number {
     if (sequence.length === 0) {
       return 0;
@@ -69,13 +78,8 @@ export class ByteQueue {
     // Use the native search when the entire search window is contiguous.
     // This temporary view never escapes the queue.
     const first = this.chunks[this.headIndex];
-    if (
-      first !== undefined &&
-      first.length - this.headOffset >= searchableBytes
-    ) {
-      return first
-        .subarray(this.headOffset, this.headOffset + searchableBytes)
-        .indexOf(sequence);
+    if (first !== undefined && first.length - this.headOffset >= searchableBytes) {
+      return first.subarray(this.headOffset, this.headOffset + searchableBytes).indexOf(sequence);
     }
 
     // KMP fallback lengths let a mismatch reuse a matched prefix instead of
@@ -94,14 +98,10 @@ export class ByteQueue {
     // matched carries across chunks; scanned counts bytes before this chunk.
     let scanned = 0;
     let matched = 0;
-    for (
-      let chunkIndex = this.headIndex;
-      scanned < searchableBytes;
-      chunkIndex += 1
-    ) {
+    for (let chunkIndex = this.headIndex; scanned < searchableBytes; chunkIndex += 1) {
       const chunk = this.chunks[chunkIndex];
       if (chunk === undefined) {
-        throw new Error("Byte queue length invariant failed.");
+        throw new Error('Byte queue length invariant failed.');
       }
       const start = chunkIndex === this.headIndex ? this.headOffset : 0;
       const end = Math.min(chunk.length, start + searchableBytes - scanned);
@@ -123,6 +123,9 @@ export class ByteQueue {
     return -1;
   }
 
+  /**
+   * Peek.
+   */
   public peek(length: number): Buffer {
     this.validateLength(length);
     // Always copy: a subarray would let callers change unread bytes in place.
@@ -134,7 +137,7 @@ export class ByteQueue {
     for (let chunkIndex = this.headIndex; remaining > 0; chunkIndex += 1) {
       const chunk = this.chunks[chunkIndex];
       if (chunk === undefined) {
-        throw new Error("Byte queue length invariant failed.");
+        throw new Error('Byte queue length invariant failed.');
       }
       const start = chunkIndex === this.headIndex ? this.headOffset : 0;
       const copied = Math.min(remaining, chunk.length - start);
@@ -146,12 +149,18 @@ export class ByteQueue {
     return output;
   }
 
+  /**
+   * Consumes the requested number of bytes from the queue.
+   */
   public read(length: number): Buffer {
     const output = this.peek(length);
     this.discard(length);
     return output;
   }
 
+  /**
+   * Discard.
+   */
   public discard(length: number): void {
     this.validateLength(length);
     // Advance the head instead of copying remaining bytes. compact() later
@@ -161,7 +170,7 @@ export class ByteQueue {
     while (remaining > 0) {
       const chunk = this.chunks[this.headIndex];
       if (chunk === undefined) {
-        throw new Error("Byte queue length invariant failed.");
+        throw new Error('Byte queue length invariant failed.');
       }
 
       const available = chunk.length - this.headOffset;
@@ -179,6 +188,9 @@ export class ByteQueue {
     this.compact();
   }
 
+  /**
+   * Clear.
+   */
   public clear(): void {
     this.chunks = [];
     this.headIndex = 0;
@@ -186,12 +198,18 @@ export class ByteQueue {
     this.byteLength = 0;
   }
 
+  /**
+   * Validate Length.
+   */
   private validateLength(length: number): void {
     if (!Number.isInteger(length) || length < 0 || length > this.byteLength) {
-      throw new RangeError("Requested byte length is outside the queue.");
+      throw new RangeError('Requested byte length is outside the queue.');
     }
   }
 
+  /**
+   * Compact.
+   */
   private compact(): void {
     // Clear immediately when empty; otherwise amortize array slicing until
     // at least 64 chunks and half the array have been consumed.
@@ -200,7 +218,10 @@ export class ByteQueue {
       return;
     }
 
-    if (this.headIndex >= 64 && this.headIndex * 2 >= this.chunks.length) {
+    if (
+      this.headIndex >= RTSP_PARSER_CONSTANTS.queueCompactionThresholdChunks &&
+      this.headIndex * RTSP_PARSER_CONSTANTS.queueCompactionRatio >= this.chunks.length
+    ) {
       this.chunks = this.chunks.slice(this.headIndex);
       this.headIndex = 0;
     }

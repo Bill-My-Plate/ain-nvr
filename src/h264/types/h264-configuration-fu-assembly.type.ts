@@ -1,6 +1,3 @@
-
-
-
 /** In-progress FU-A reconstruction while learning SPS/PPS configuration. */
 export type FuAssembly = {
   /** RTP timestamp shared by fragments of this NAL unit. */

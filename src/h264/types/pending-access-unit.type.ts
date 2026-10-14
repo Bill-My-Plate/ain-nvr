@@ -1,10 +1,4 @@
-
-
-
-
-
 import type { FuAssembly } from './access-unit-assembler-fu-assembly.type.js';
-
 /** Mutable state for packets grouped under one RTP timestamp. */
 export type PendingAccessUnit = {
   /** Original 32-bit RTP timestamp of this unit. */
@@ -19,7 +13,7 @@ export type PendingAccessUnit = {
   damaged: boolean;
   /** Sum of RTP payload lengths, used for the 8 MiB limit. */
   bytes: number;
-  /** Number of RTP packets seen for this unit, used for the 4,096 limit. */
+  /** Packets produced or retained by this operation. */
   packets: number;
   /** Stops parsing further packets with this timestamp after a limit. */
   overflowed: boolean;

@@ -49,3 +49,9 @@ Give each new or refactored module a short responsibility note describing what i
 ## 11. Group each module by file role
 
 Keep only `index.ts` and `README.md` at each `src/<module>/` root. Put type aliases, interfaces, and enums in `types/`; functions in `utils/`; constants in `constants/`; stateful classes in `services/`; error classes in `errors/`; and executable worker/process entry scripts in `entries/`. Create only folders that contain files. Do not add entrypoints inside these folders: same-module code imports the specific file, and other modules import through the root `index.ts`. Keep the worker entry filenames stable and update their resolver if their location changes. `npm run check` enforces this layout.
+
+## 12. Explain contracts and protocol values
+
+Document every type and each of its fields, every class and method, and every utility function. Describe non-obvious control flow where it happens. For functions that accept `Buffer`, state whether input is a complete packet or a stream chunk, its minimum or fixed length, and the meaning of its byte regions. Use explanatory named constants for protocol fields, limits, and time conversions; `0` and `1` may remain where they plainly mean an empty value, first position, or single step. Give every class method an explicit access modifier.
+
+Keep each module README current with its responsibility, technical invariants, and every export from its internal `index.ts`. Maintain the module's `how-it-works.md` and `review-map.md` under `/home/khaled/bmp/docs-chats/ain-nvr-refactoring/<module>/`, including a link to every source file in the review map.

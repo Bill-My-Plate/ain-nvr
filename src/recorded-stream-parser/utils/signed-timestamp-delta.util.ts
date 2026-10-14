@@ -1,12 +1,12 @@
-
-
-
-
-
-
+import { RECORDED_STREAM_CONSTANTS } from '../constants/recorded-stream-parser-numeric-values.constant.js';
+/**
+ * Computes the shortest signed distance between two wrapping 32-bit RTP timestamps.
+ */
 export function signedTimestampDelta(timestamp: number, anchor: number): number {
   let delta = timestamp - anchor;
-  if (delta > 0x8000_0000) delta -= 0x1_0000_0000;
-  else if (delta < -0x8000_0000) delta += 0x1_0000_0000;
+  if (delta > RECORDED_STREAM_CONSTANTS.rtpTimestampHalfRange)
+    delta -= RECORDED_STREAM_CONSTANTS.rtpTimestampRange;
+  else if (delta < -RECORDED_STREAM_CONSTANTS.rtpTimestampHalfRange)
+    delta += RECORDED_STREAM_CONSTANTS.rtpTimestampRange;
   return delta;
 }
