@@ -1,61 +1,28 @@
-import { RECORDING_PARSER_CONSTANTS } from '../constants/recording-parser-numeric-values.constant.js';
 import type { MediaPacket } from '../../media/index.js';
 import { RecordingParser } from './recording-parser.class.js';
+import { RecordingPacketQueue } from './recording-packet-queue.class.js';
 
 import type { RecordingPipelineState } from '../types/recording-pipeline-state.type.js';
 import type { RecordingPipelineOptions } from '../types/recording-pipeline-options.interface.js';
 import type { RecordingPipelineStatus } from '../types/recording-pipeline-status.interface.js';
-import { positiveInteger } from '../utils/positive-integer.util.js';
 /**
  * Serializes packet writes and applies bounded socket backpressure. It does not choose
  * file names, write metadata, move cache files, or delete recordings.
  */
 export class RecordingPipeline<TLocation> {
   private readonly parser: RecordingParser<TLocation>;
-  private readonly pauseAtBytes: number;
-  private readonly resumeAtBytes: number;
-  private readonly maximumQueuedBytes: number;
-  private readonly maximumQueuedPackets: number;
-  private readonly queue: MediaPacket[] = [];
+  private readonly queue: RecordingPacketQueue;
   private stateValue: RecordingPipelineState = 'idle';
-  private queuedBytes = 0;
   private writtenPackets = 0;
-  private paused = false;
   private stopping = false;
   private unsubscribe: (() => void) | undefined;
-  private wake: (() => void) | undefined;
   private runPromise: Promise<void> | undefined;
   private lastError: Error | undefined;
   /**
    * Creates the instance and initializes its state.
    */
   public constructor(private readonly options: RecordingPipelineOptions<TLocation>) {
-    this.pauseAtBytes = positiveInteger(
-      options.pauseAtBytes,
-      RECORDING_PARSER_CONSTANTS.defaultPauseAtBytes,
-      'pauseAtBytes',
-    );
-    this.resumeAtBytes = positiveInteger(
-      options.resumeAtBytes,
-      RECORDING_PARSER_CONSTANTS.defaultResumeAtBytes,
-      'resumeAtBytes',
-    );
-    this.maximumQueuedBytes = positiveInteger(
-      options.maximumQueuedBytes,
-      RECORDING_PARSER_CONSTANTS.defaultMaximumQueuedBytes,
-      'maximumQueuedBytes',
-    );
-    this.maximumQueuedPackets = positiveInteger(
-      options.maximumQueuedPackets,
-      RECORDING_PARSER_CONSTANTS.defaultMaximumQueuedPackets,
-      'maximumQueuedPackets',
-    );
-    if (this.resumeAtBytes >= this.pauseAtBytes) {
-      throw new RangeError('resumeAtBytes must be smaller than pauseAtBytes.');
-    }
-    if (this.pauseAtBytes >= this.maximumQueuedBytes) {
-      throw new RangeError('pauseAtBytes must be smaller than maximumQueuedBytes.');
-    }
+    this.queue = new RecordingPacketQueue(options.source, options);
     this.parser = new RecordingParser<TLocation>(options);
   }
 
@@ -65,8 +32,8 @@ export class RecordingPipeline<TLocation> {
   public get status(): RecordingPipelineStatus {
     return {
       state: this.stateValue,
-      queuedBytes: this.queuedBytes,
-      queuedPackets: this.queue.length,
+      queuedBytes: this.queue.queuedBytes,
+      queuedPackets: this.queue.queuedPackets,
       writtenPackets: this.writtenPackets,
       ...(this.lastError === undefined ? {} : { lastError: this.lastError }),
     };
@@ -104,9 +71,9 @@ export class RecordingPipeline<TLocation> {
     if (this.stateValue !== 'failed') this.stateValue = 'stopping';
     this.unsubscribe?.();
     this.unsubscribe = undefined;
-    this.wake?.();
+    this.queue.wake();
     await this.runPromise;
-    this.resumeSource();
+    this.queue.resumeSource();
     if (this.stateValue !== 'failed') this.stateValue = 'stopped';
   }
 
@@ -115,42 +82,20 @@ export class RecordingPipeline<TLocation> {
    */
   private enqueue(packet: MediaPacket): void {
     if (this.stateValue !== 'running') return;
-    this.queue.push(packet);
-    this.queuedBytes += packet.rawInterleavedFrame.length;
-    if (
-      this.queuedBytes >= this.maximumQueuedBytes ||
-      this.queue.length >= this.maximumQueuedPackets
-    ) {
-      this.fail(
-        new Error(
-          `Recording queue exceeded ${this.maximumQueuedBytes} bytes or ` +
-            `${this.maximumQueuedPackets} packets.`,
-        ),
-      );
-      return;
-    }
-    if (!this.paused && this.queuedBytes >= this.pauseAtBytes) {
-      this.paused = true;
-      this.options.source.pauseMedia();
-    }
-    this.wake?.();
-    this.wake = undefined;
+    const overflow = this.queue.push(packet);
+    if (overflow !== undefined) this.fail(overflow);
   }
 
   /**
    * Runs the operation until completion or cancellation.
    */
   private async run(): Promise<void> {
-    while (!this.stopping || this.queue.length > 0) {
+    while (!this.stopping || this.queue.queuedPackets > 0) {
       const packet = this.queue.shift();
       if (packet === undefined) {
-        await new Promise<void>((resolve) => {
-          this.wake = resolve;
-        });
+        await this.queue.wait();
         continue;
       }
-      this.queuedBytes -= packet.rawInterleavedFrame.length;
-      if (this.paused && this.queuedBytes <= this.resumeAtBytes) this.resumeSource();
       const events = await this.parser.process(packet, this.options.writer);
       this.writtenPackets += 1;
       if (events.length > 0) await this.options.onIndexEvents?.(events);
@@ -173,20 +118,7 @@ export class RecordingPipeline<TLocation> {
     this.stopping = true;
     this.unsubscribe?.();
     this.unsubscribe = undefined;
-    this.queue.length = 0;
-    this.queuedBytes = 0;
-    this.resumeSource();
-    this.wake?.();
-    this.wake = undefined;
+    this.queue.clear();
     this.options.onError?.(error);
-  }
-
-  /**
-   * Resume Source.
-   */
-  private resumeSource(): void {
-    if (!this.paused) return;
-    this.paused = false;
-    this.options.source.resumeMedia();
   }
 }

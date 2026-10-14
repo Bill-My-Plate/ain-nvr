@@ -4,7 +4,9 @@ Converts live media packets into recording write requests and index events. It t
 
 ## How it works
 
-RecordingParser keeps per-track reorder and index state and serializes packets with RTSP interleaved headers. RecordingPipeline owns the source subscription, queue, writer lifecycle, and stop/flush behavior. TrackIndexer maps RTP time to recording time, using credible RTCP sender reports when available.
+`RecordingParser` owns per-track RTP reorder buffers and coordinates flushes. `RecordingSafeBoundary` holds packets until a complete, undamaged H.264 IDR can start a segment. `RecordingIndexWriter` owns boundary state, writer calls, and index events. Its per-track `TrackIndexer` delegates time mapping to `TrackClockIndexer` and H.264 configuration/keyframe detection to `TrackVideoIndexer`.
+
+`RecordingPipeline` owns the source subscription and write loop. `RecordingPacketQueue` enforces queue limits, pauses or resumes the source, and wakes the loop. The queue is cleared on failure; a normal stop drains it before flushing the parser. These helpers stay private to the module, so the entry point and published package API remain unchanged.
 
 **Internal entry point:** [`index.ts`](index.ts). Cross-module imports use this entry point. Published package subpaths are defined by `src/exports/` and `package.json`.
 

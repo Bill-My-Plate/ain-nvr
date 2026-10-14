@@ -209,6 +209,74 @@ test('recording pipeline serializes writes and releases bounded backpressure', a
   assert.equal(pipeline.status.state, 'stopped');
 });
 
+test('recording pipeline fails on queue overflow and releases source backpressure', async () => {
+  let subscriber: ((packet: MediaPacket) => void) | undefined;
+  let pauses = 0;
+  let resumes = 0;
+  const errors: Error[] = [];
+  const pipeline = new RecordingPipeline<number>({
+    source: {
+      subscribeMediaPackets: (next) => {
+        subscriber = next;
+        return () => { subscriber = undefined; };
+      },
+      pauseMedia: () => { pauses += 1; },
+      resumeMedia: () => { resumes += 1; },
+    },
+    tracks: [videoTrack],
+    pauseAtBytes: 10,
+    resumeAtBytes: 5,
+    maximumQueuedBytes: 30,
+    writer: { write: async () => 0 },
+    onError: (error) => { errors.push(error); },
+  });
+  pipeline.start();
+  subscriber?.(mediaPacket(1, 90_000, Buffer.from([0x61, 1])));
+  subscriber?.(mediaPacket(2, 93_600, Buffer.from([0x61, 2])));
+  assert.equal(pipeline.status.state, 'failed');
+  assert.equal(pipeline.status.queuedPackets, 0);
+  assert.equal(pipeline.status.queuedBytes, 0);
+  assert.equal(pauses, 1);
+  assert.equal(resumes, 1);
+  assert.match(errors[0]?.message ?? '', /Recording queue exceeded/);
+  await pipeline.stop();
+});
+
+test('recording index keeps mapped times monotonic after a backwards RTCP anchor', async () => {
+  const parser = new RecordingParser<number>({ tracks: [videoTrack] });
+  const writer = { write: async () => 0 };
+  const first = await parser.process(mediaPacket(1, 90_000, Buffer.from([0x61, 1])), writer);
+  assert.equal(first.find((event) => event.type === 'packet')?.timeMs, 1_000);
+  const second = await parser.process(mediaPacket(2, 93_600, Buffer.from([0x61, 2]), {
+    arrivalTimeMs: 1_040,
+  }), writer);
+  assert.equal(second.find((event) => event.type === 'packet')?.timeMs, 1_040);
+
+  const { rtp: _rtp, ...packetWithoutRtp } = mediaPacket(
+    3, 97_200, Buffer.from([0x61, 3]), { arrivalTimeMs: 1_080 },
+  );
+  const reportPacket: MediaPacket = {
+    ...packetWithoutRtp,
+    rtcpSenderReport: {
+      ssrc: 1,
+      ntpSeconds: 0,
+      ntpFraction: 0,
+      rtpTimestamp: 93_600,
+      ntpTimeMs: 900,
+      senderPacketCount: 0,
+      senderOctetCount: 0,
+      reportCount: 0,
+      packetLength: 28,
+    },
+  };
+  const anchor = await parser.process(reportPacket, writer);
+  assert.equal(anchor.find((event) => event.type === 'clock-anchor')?.source, 'rtcp-sr');
+  const third = await parser.process(mediaPacket(3, 97_200, Buffer.from([0x61, 4]), {
+    arrivalTimeMs: 1_080,
+  }), writer);
+  assert.equal(third.find((event) => event.type === 'packet')?.timeMs, 1_040);
+});
+
 function memorySource(data: Buffer, safeLength = data.length): RecordedByteSource {
   return {
     id: 'memory-segment',
