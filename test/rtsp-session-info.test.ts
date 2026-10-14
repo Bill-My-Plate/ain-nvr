@@ -6,6 +6,7 @@ import { type RtspClientSession } from '../src/rtsp-client/types/rtsp-client-ses
 import { parseSdp } from '../src/rtsp-parser/utils/parse-sdp.util.js';
 import { RtspSessionManager } from '../src/stream-session/services/rtsp-session-manager.class.js';
 import { RtspStreamSession } from '../src/stream-session/services/rtsp-stream-session.class.js';
+import { MAX_STARTUP_FRAMES } from '../src/stream-session/constants/max-startup-frames.constant.js';
 import { createBaselineSps, mediaPacket } from './helpers/media.js';
 import { AinNvrError } from '../src/shared/errors/ain-nvr-error.class.js';
 
@@ -272,4 +273,44 @@ test('stream session parses frames, assembles video, and reports packet and subs
   assert.equal(subscriberErrors.length, 3);
   assert.equal(packetErrors.length, 1);
   await session.stop();
+});
+
+test('stream session removes connection listeners when stopped', async () => {
+  const client = new SessionInfoRtspClient(createSession());
+  const session = new RtspStreamSession({
+    url: 'rtsp://camera.example/stream',
+    clientFactory: () => client,
+  });
+
+  await session.start();
+  assert.equal(client.listenerCount('interleaved'), 1);
+  assert.equal(client.listenerCount('disconnect'), 1);
+
+  await session.stop();
+  assert.equal(client.listenerCount('interleaved'), 0);
+  assert.equal(client.listenerCount('disconnect'), 0);
+});
+
+test('startup frame overflow closes the attempt without publishing frames', async () => {
+  const client = new DeferredClient(createSession());
+  const session = new RtspStreamSession({
+    url: 'rtsp://camera.example/stream',
+    clientFactory: () => client,
+  });
+  const packets: unknown[] = [];
+  session.subscribeMediaPackets((packet) => packets.push(packet));
+  const firstFailure = new Promise<Error>((resolve) => session.once('initial-error', resolve));
+  const started = assert.rejects(session.start(), /stopped/);
+
+  const frame = { ...mediaPacket(1, 90_000, Buffer.from([0x65, 1])).frame, channel: 4 };
+  for (let index = 0; index <= MAX_STARTUP_FRAMES; index += 1) {
+    client.emit('interleaved', frame);
+  }
+  await firstFailure;
+  await session.stop();
+  await started;
+
+  assert.deepEqual(packets, []);
+  assert.equal(client.listenerCount('interleaved'), 0);
+  assert.equal(client.listenerCount('disconnect'), 0);
 });

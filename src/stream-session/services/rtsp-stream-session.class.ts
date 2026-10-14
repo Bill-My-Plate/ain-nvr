@@ -2,7 +2,6 @@ import { EventEmitter } from 'node:events';
 import { AinNvrError } from '../../shared/index.js';
 import type { TrackDescription } from '../../media/index.js';
 import { RtspClient, type RtspClientSession } from '../../rtsp-client/index.js';
-import type { RtspInterleavedFrame } from '../../rtsp-parser/index.js';
 
 import type { SessionState } from '../types/session-state.type.js';
 import type { RtspStreamSessionOptions } from '../types/rtsp-stream-session-options.interface.js';
@@ -16,9 +15,8 @@ import { sessionInfoFromSession } from '../utils/session-info-from-session.util.
 import { DEFAULT_RECONNECT_INITIAL_MS } from '../constants/default-reconnect-initial-ms.constant.js';
 import { DEFAULT_RECONNECT_MAXIMUM_MS } from '../constants/default-reconnect-maximum-ms.constant.js';
 import { RECONNECT_BACKOFF_FACTOR } from '../constants/reconnect-backoff-factor.constant.js';
-import { MAX_STARTUP_BUFFER_BYTES } from '../constants/max-startup-buffer-bytes.constant.js';
-import { MAX_STARTUP_FRAMES } from '../constants/max-startup-frames.constant.js';
 import { RtspMediaProcessor } from './rtsp-media-processor.class.js';
+import { RtspConnectionAttempt } from './rtsp-connection-attempt.class.js';
 /** Maintains one reconnecting RTSP stream and publishes negotiated media generations. */
 export class RtspStreamSession extends EventEmitter {
   private readonly reconnectInitialMs: number;
@@ -132,7 +130,7 @@ export class RtspStreamSession extends EventEmitter {
     if (this.pauseCount === 0) this.currentClient?.resumeMedia();
   }
 
-  /** Reconnects until stopped, buffering early frames until their channels are known. */
+  /** Reconnects until stopped, giving each client attempt its own early-media queue. */
   private async run(): Promise<void> {
     let delayMs = this.reconnectInitialMs;
     let connectedOnce = false;
@@ -140,49 +138,22 @@ export class RtspStreamSession extends EventEmitter {
       this.setState(connectedOnce ? 'reconnecting' : 'connecting');
       const client = this.clientFactory(this.options.url);
       this.currentClient = client;
-      const queuedFrames: RtspInterleavedFrame[] = [];
-      let queuedBytes = 0;
-      let startupOverflow = false;
-      let overflowClose: Promise<void> | undefined;
-      let sessionReady = false;
-      let disconnect: ((error: Error) => void) | undefined;
-      const disconnected = new Promise<Error>((resolve) => {
-        disconnect = resolve;
-      });
-      // RtspClient intentionally suppresses disconnect events during an explicit close.
-      // Wake run() on stop as well, otherwise session.stop waits on itself forever.
-      const stopped = (): void => disconnect?.(new Error('RTSP stream session stopped.'));
-      this.stopController.signal.addEventListener('abort', stopped, { once: true });
-      const onFrame = (frame: RtspInterleavedFrame): void => {
-        if (!sessionReady) {
-          if (startupOverflow) return;
-          queuedBytes += frame.rawHeader.length + frame.payload.length;
-          if (queuedBytes > MAX_STARTUP_BUFFER_BYTES || queuedFrames.length >= MAX_STARTUP_FRAMES) {
-            startupOverflow = true;
-            queuedFrames.length = 0;
-            overflowClose = client.close().catch(() => undefined);
-            return;
-          }
-          queuedFrames.push(frame);
-        }
-        else this.mediaProcessor.handleFrame(frame);
-      };
-      client.on('interleaved', onFrame);
-      client.once('disconnect', (error: Error) => disconnect?.(error));
+      const attempt = new RtspConnectionAttempt(
+        client,
+        this.stopController.signal,
+        (frame) => this.mediaProcessor.handleFrame(frame),
+      );
       try {
-        const session = await client.connect();
-        if (startupOverflow) throw new Error('RTSP negotiation media buffer exceeded its limit.');
+        const session = await attempt.connect();
         if (this.stopController.signal.aborted) break;
         // Publish the new track map before draining media received during SETUP/PLAY.
         this.configureSession(session, connectedOnce);
-        sessionReady = true;
-        for (const frame of queuedFrames) this.mediaProcessor.handleFrame(frame);
-        queuedFrames.length = 0;
+        attempt.activate();
         connectedOnce = true;
         delayMs = this.reconnectInitialMs;
         this.setState('streaming');
         this.emit('ready', session);
-        const error = await disconnected;
+        const error = await attempt.waitForDisconnect();
         throw error;
       } catch (error) {
         if (this.stopController.signal.aborted) break;
@@ -196,10 +167,7 @@ export class RtspStreamSession extends EventEmitter {
         }
         delayMs = Math.min(delayMs * RECONNECT_BACKOFF_FACTOR, this.reconnectMaximumMs);
       } finally {
-        this.stopController.signal.removeEventListener('abort', stopped);
-        client.removeListener('interleaved', onFrame);
-        await overflowClose;
-        await client.close().catch(() => undefined);
+        await attempt.close();
         if (this.currentClient === client) this.currentClient = undefined;
       }
     }
