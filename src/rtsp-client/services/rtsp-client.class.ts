@@ -3,30 +3,19 @@ import net, { type Socket } from 'node:net';
 import tls from 'node:tls';
 import { RTSP_CLIENT_DEFAULTS } from '../constants/rtsp-client-defaults.constant.js';
 import { RTSP_STATUS_CODES } from '../constants/rtsp-status-codes.constant.js';
-import { RTSP_TRANSPORT } from '../constants/rtsp-transport.constant.js';
 import { RTSP_PROTOCOL_VERSION } from '../constants/rtsp-protocol-version.constant.js';
-import { RTSP_PLAY_RANGE } from '../constants/rtsp-play-range.constant.js';
-import { AinNvrError } from '../../shared/index.js';
 import { type RtspCredentials } from '../types/rtsp-credentials.interface.js';
 import type { RtspInterleavedFrame } from '../../rtsp-parser/index.js';
-import { type RtspMessage } from '../../rtsp-parser/index.js';
+import type { RtspMessage } from '../../rtsp-parser/index.js';
 import { RtspParser } from '../../rtsp-parser/index.js';
-import {
-  parseSdp,
-  resolveRtspControlUrl,
-  selectG711AudioMedia,
-  selectH264VideoMedia,
-} from '../../rtsp-parser/index.js';
 
 import type { RtspClientOptions } from '../types/rtsp-client-options.interface.js';
-import type { RtspAudioTrack } from '../types/rtsp-audio-track.interface.js';
 import type { RtspClientSession } from '../types/rtsp-client-session.interface.js';
 import { RtspClientError } from '../errors/rtsp-client-error.class.js';
 import { getRtspPort } from '../utils/get-rtsp-port.util.js';
 import { positiveInteger } from '../utils/positive-integer.util.js';
-import { parseSession } from '../utils/parse-session.util.js';
-import { interleavedChannels } from '../utils/interleaved-channels.util.js';
 import { RtspRequestService } from './rtsp-request-service.class.js';
+import { RtspNegotiationService } from './rtsp-negotiation-service.class.js';
 import { RtspKeepaliveService } from './rtsp-keepalive-service.class.js';
 import { RtspMediaWatchdogService } from './rtsp-media-watchdog-service.class.js';
 /** Manage one RTSP 1.0 camera connection, authentication, TCP media negotiation, and frame delivery. */
@@ -38,10 +27,10 @@ export class RtspClient extends EventEmitter {
   private readonly connectEvent: 'connect' | 'secureConnect';
   private readonly parser = new RtspParser();
   private readonly requests: RtspRequestService;
+  private readonly negotiation: RtspNegotiationService;
   private readonly keepalive: RtspKeepaliveService;
   private readonly mediaWatchdog: RtspMediaWatchdogService;
   private socket: Socket | undefined;
-  private sessionId: string | undefined;
   private closing = false;
   /** Validate camera URL and timers, then select a TCP or TLS socket factory. */
   public constructor(options: RtspClientOptions) {
@@ -87,6 +76,7 @@ export class RtspClient extends EventEmitter {
         ? (port, host) => tls.connect({ port, host, servername: host })
         : (port, host) => net.createConnection({ port, host }));
     this.requests = new RtspRequestService(() => this.socket, credentials, requestTimeoutMs);
+    this.negotiation = new RtspNegotiationService(this.requestUrl, this.requests);
     this.keepalive = new RtspKeepaliveService(
       this.requestUrl,
       configuredKeepaliveMs,
@@ -127,105 +117,15 @@ export class RtspClient extends EventEmitter {
     }
 
     try {
-      // Learn whether the camera advertises GET_PARAMETER for keepalives.
-      const options = await this.requests.request('OPTIONS', this.requestUrl);
-      this.keepalive.configure(options);
-
-      // Discover the SDP tracks before requesting any media channels.
-      const describe = await this.requests.request('DESCRIBE', this.requestUrl, {
-        headers: { Accept: 'application/sdp' },
-      });
-      const sdp = describe.body.toString('utf8');
-      const description = parseSdp(sdp);
-      const selected = selectH264VideoMedia(description);
-      if (selected === undefined || !selected.media.control) {
-        throw new AinNvrError(
-          'unsupported_codec',
-          'DESCRIBE response has no controlled H.264 video track.',
-        );
-      }
-      const contentBase =
-        describe.headers.get('content-base') ?? describe.headers.get('content-location');
-      const controlUrl = resolveRtspControlUrl(
-        this.requestUrl,
-        selected.media.control,
-        description.sessionControl,
-        contentBase,
-      );
-
-      // Video is required. Negotiate its channels and keep the camera's Session ID.
-      const setup = await this.requests.request('SETUP', controlUrl, {
-        headers: { Transport: RTSP_TRANSPORT.videoHeader },
-      });
-      const session = parseSession(setup.headers.get('session'));
-      this.sessionId = session.sessionId;
-      const videoChannels = interleavedChannels(
-        setup.headers.get('transport'),
-        RTSP_TRANSPORT.videoRtpChannel,
-        RTSP_TRANSPORT.videoRtcpChannel,
-      );
-      const { rtpChannel, rtcpChannel } = videoChannels;
-
-      // Audio is optional; a camera rejecting audio SETUP must not stop video.
-      let audio: RtspAudioTrack | undefined;
-      const selectedAudio = selectG711AudioMedia(description);
-      if (selectedAudio?.media.control) {
-        const audioControlUrl = resolveRtspControlUrl(
-          this.requestUrl,
-          selectedAudio.media.control,
-          description.sessionControl,
-          contentBase,
-        );
-        try {
-          const audioSetup = await this.requests.request('SETUP', audioControlUrl, {
-            headers: {
-              Session: this.sessionId,
-              Transport: RTSP_TRANSPORT.audioHeader,
-            },
-          });
-          const audioChannels = interleavedChannels(
-            audioSetup.headers.get('transport'),
-            RTSP_TRANSPORT.audioRtpChannel,
-            RTSP_TRANSPORT.audioRtcpChannel,
-          );
-          audio = {
-            codec: selectedAudio.codec,
-            media: selectedAudio.media,
-            rtpMap: selectedAudio.rtpMap,
-            controlUrl: audioControlUrl,
-            ...audioChannels,
-          };
-        } catch {
-          // Optional audio setup failure does not interrupt video recording.
-        }
-      }
-
-      // Start media only after all accepted tracks have been SETUP.
-      await this.requests.request('PLAY', this.requestUrl, {
-        headers: { Session: this.sessionId, Range: RTSP_PLAY_RANGE },
-      });
+      const { session, optionsResponse } = await this.negotiation.negotiate();
+      this.keepalive.configure(optionsResponse);
       this.mediaWatchdog.watchChannels([
-        rtpChannel,
-        ...(audio === undefined ? [] : [audio.rtpChannel]),
+        session.video.rtpChannel,
+        ...(session.audio === undefined ? [] : [session.audio.rtpChannel]),
       ]);
-      this.keepalive.start(session.sessionId, session.timeoutSeconds);
+      this.keepalive.start(session.sessionId, session.sessionTimeoutSeconds);
       this.mediaWatchdog.start();
-      return {
-        sdp,
-        description,
-        video: {
-          media: selected.media,
-          rtpMap: selected.rtpMap,
-          controlUrl,
-          rtpChannel,
-          rtcpChannel,
-        },
-        ...(audio === undefined ? {} : { audio }),
-        sessionId: this.sessionId,
-        ...(session.timeoutSeconds === undefined
-          ? {}
-          : { sessionTimeoutSeconds: session.timeoutSeconds }),
-      };
+      return session;
     } catch (error) {
       socket.destroy();
       throw error;
@@ -244,10 +144,10 @@ export class RtspClient extends EventEmitter {
     if (socket === undefined) {
       return;
     }
-    if (!socket.destroyed && this.sessionId !== undefined) {
+    if (!socket.destroyed && this.negotiation.sessionId !== undefined) {
       try {
         await this.requests.request('TEARDOWN', this.requestUrl, {
-          headers: { Session: this.sessionId },
+          headers: { Session: this.negotiation.sessionId },
           allowAuthRetry: false,
         });
       } catch {

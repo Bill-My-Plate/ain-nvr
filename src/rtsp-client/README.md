@@ -4,14 +4,14 @@ This module owns a single camera connection over RTSP or RTSPS. It opens a TCP o
 
 ## Connection flow
 
-1. `RtspClient.connect()` connects to the camera and sends OPTIONS to learn available methods.
+1. `RtspClient.connect()` opens the socket; `RtspNegotiationService` sends OPTIONS to learn available methods.
 2. DESCRIBE returns SDP. The RTSP parser reads the response; SDP helpers select a controlled H.264 track and optional G.711 track.
 3. SETUP requests RTP/RTCP over interleaved TCP channels. Video uses requested channels 0–1 and optional audio uses 2–3; the camera may select other channel identifiers.
 4. PLAY starts media. The client returns the original SDP, parsed description, negotiated tracks, and session ID.
 5. `RtspKeepaliveService` uses GET_PARAMETER when advertised, otherwise OPTIONS. `RtspMediaWatchdogService` disconnects after the configured period without RTP on a negotiated channel.
 6. `close()` stops timers, attempts TEARDOWN, and closes the socket. `RtspStreamSession` owns reconnect attempts after a disconnect.
 
-Internally, `RtspClient` owns the socket and session negotiation. `RtspRequestService` owns CSeq, authentication, pending responses, and request timeouts. `RtspKeepaliveService` and `RtspMediaWatchdogService` own their timers. These three services are private to this module and are not exported by `index.ts`.
+Internally, `RtspClient` owns the socket, parser dispatch, frame events, and shutdown. `RtspNegotiationService` owns the ordered OPTIONS/DESCRIBE/SETUP/PLAY exchange and the Session ID needed for TEARDOWN. `RtspRequestService` owns CSeq, authentication, pending responses, and request timeouts. `RtspKeepaliveService` and `RtspMediaWatchdogService` own their timers. These services are private to this module and are not exported by `index.ts`.
 
 The socket can deliver arbitrary byte chunks. `RtspParser` reassembles RTSP messages and dollar-prefixed interleaved frames. A TCP chunk is not necessarily one complete RTSP message or one RTP packet. This client passes each complete interleaved frame to listeners; it does not parse RTP packet fields.
 
