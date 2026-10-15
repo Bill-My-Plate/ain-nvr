@@ -1,45 +1,31 @@
-import { STREAM_ADAPTER_CONSTANTS } from '../constants/stream-adapters-numeric-values.constant.js';
 import { randomBytes } from 'node:crypto';
 import net, { type Server, type Socket } from 'node:net';
-import type { TrackDescription } from '../../media/index.js';
-import {
-  createH264CodecConfiguration,
-  H264ConfigurationTracker,
-  type H264CodecConfiguration,
-} from '../../h264/index.js';
-import { type RtspMessage } from '../../rtsp-parser/index.js';
-import { RtspParser } from '../../rtsp-parser/index.js';
-import type { MediaPacket } from '../../media/index.js';
 
+import type { MediaPacket, TrackDescription } from '../../media/index.js';
+import { RtspParser } from '../../rtsp-parser/index.js';
+
+import { STREAM_ADAPTER_CONSTANTS } from '../constants/stream-adapters-numeric-values.constant.js';
+import type { BridgeClient } from '../types/bridge-client.type.js';
+import type { BufferedFrame } from '../types/buffered-frame.type.js';
 import type { RtspLoopbackBridgeOptions } from '../types/rtsp-loopback-bridge-options.interface.js';
 import type { RtspLoopbackBridgeStatus } from '../types/rtsp-loopback-bridge-status.interface.js';
-import type { BufferedFrame } from '../types/buffered-frame.type.js';
-import type { BridgeClient } from '../types/bridge-client.type.js';
-import { positiveInteger } from '../utils/positive-integer.util.js';
-import { signedTimestampDelta } from '../utils/signed-timestamp-delta.util.js';
+import { createLoopbackSdp } from '../utils/create-loopback-sdp.util.js';
 import { h264Track } from '../utils/h264-track.util.js';
-import { trackSignature } from '../utils/track-signature.util.js';
-import { parseInterleavedChannels } from '../utils/parse-interleaved-channels.util.js';
+import { positiveInteger } from '../utils/positive-integer.util.js';
 import { interleavedFrame } from '../utils/rtsp-loopback-bridge-interleaved-frame.util.js';
-/**
- * Serves a live packet source to a local RTSP client over interleaved TCP.
- */
+import { RtspLoopbackMediaState } from './rtsp-loopback-media-state.class.js';
+import { RtspLoopbackRequestHandler } from './rtsp-loopback-request-handler.class.js';
+
+/** Serves a live packet source to local RTSP clients over interleaved TCP. */
 export class RtspLoopbackBridge {
-  private readonly maximumPrerollBytes: number;
-  private readonly maximumPrerollPackets: number;
   private readonly maximumClientQueuedBytes: number;
   private readonly maximumClients: number;
   private readonly server: Server;
+  private readonly media: RtspLoopbackMediaState;
+  private readonly requests: RtspLoopbackRequestHandler;
   private readonly clients = new Set<BridgeClient>();
-  private readonly preroll: BufferedFrame[] = [];
   private readonly token = randomBytes(STREAM_ADAPTER_CONSTANTS.loopbackTokenBytes).toString('hex');
   private unsubscribe: (() => void) | undefined;
-  private currentTrack: TrackDescription | undefined;
-  private configurationTracker = new H264ConfigurationTracker();
-  private configuration: H264CodecConfiguration | undefined;
-  private currentSsrc: number | undefined;
-  private currentTimestamp: number | undefined;
-  private prerollBytes = 0;
   private forwardedPackets = 0;
   private droppedClients = 0;
   private running = false;
@@ -47,16 +33,15 @@ export class RtspLoopbackBridge {
   private startPromise: Promise<string> | undefined;
   private stopPromise: Promise<void> | undefined;
   private urlValue: string | undefined;
-  /**
-   * Creates the instance and initializes its state.
-   */
+
+  /** Validates limits and wires the media, control, and socket owners together. */
   public constructor(private readonly options: RtspLoopbackBridgeOptions) {
-    this.maximumPrerollBytes = positiveInteger(
+    const maximumPrerollBytes = positiveInteger(
       options.maximumPrerollBytes,
       STREAM_ADAPTER_CONSTANTS.maximumPrerollBytes,
       'maximumPrerollBytes',
     );
-    this.maximumPrerollPackets = positiveInteger(
+    const maximumPrerollPackets = positiveInteger(
       options.maximumPrerollPackets,
       STREAM_ADAPTER_CONSTANTS.maximumPrerollPackets,
       'maximumPrerollPackets',
@@ -71,61 +56,61 @@ export class RtspLoopbackBridge {
       STREAM_ADAPTER_CONSTANTS.defaultMaximumClients,
       'maximumClients',
     );
+    this.media = new RtspLoopbackMediaState(
+      maximumPrerollBytes,
+      maximumPrerollPackets,
+      () => this.disconnectClients(),
+    );
+    this.requests = new RtspLoopbackRequestHandler(
+      this.token,
+      () => this.urlValue,
+      () => createLoopbackSdp(this.media.track as TrackDescription, this.media.codecConfiguration),
+      (client) => this.replayPreroll(client),
+    );
     this.server = net.createServer((socket) => this.accept(socket));
     this.server.on('error', (error) => this.reportError(error));
   }
 
-  /**
-   * Returns the local RTSP URL after startup.
-   */
+  /** Returns the local RTSP URL after startup. */
   public get url(): string | undefined {
     return this.urlValue;
   }
 
-  /**
-   * Returns a snapshot of the current status.
-   */
+  /** Returns a snapshot of listener, client, and media forwarding state. */
   public get status(): RtspLoopbackBridgeStatus {
     return {
       running: this.running,
       clientCount: this.clients.size,
       playingClientCount: [...this.clients].filter((client) => client.playing).length,
-      prerollBytes: this.prerollBytes,
-      prerollPackets: this.preroll.length,
+      prerollBytes: this.media.prerollBytes,
+      prerollPackets: this.media.prerollPackets,
       forwardedPackets: this.forwardedPackets,
       droppedClients: this.droppedClients,
     };
   }
 
-  /**
-   * Starts the operation and initializes its resources.
-   */
+  /** Starts the loopback listener once and returns its token-scoped URL. */
   public start(): Promise<string> {
     if (this.stopped) return Promise.reject(new Error('RTSP bridge has been stopped.'));
     this.startPromise ??= this.startInternal();
     return this.startPromise;
   }
 
-  /**
-   * Stops active work and releases owned resources.
-   */
+  /** Unsubscribes from source media and closes every client and the listener. */
   public stop(): Promise<void> {
     this.stopPromise ??= this.stopInternal();
     return this.stopPromise;
   }
 
-  /**
-   * Stop Internal.
-   */
+  /** Releases resources after any pending startup finishes. */
   private async stopInternal(): Promise<void> {
     this.stopped = true;
     await this.startPromise?.catch(() => undefined);
     this.unsubscribe?.();
     this.unsubscribe = undefined;
-    for (const client of this.clients) client.socket.destroy();
+    this.disconnectClients();
     this.clients.clear();
-    this.preroll.length = 0;
-    this.prerollBytes = 0;
+    this.media.clearPreroll();
     if (this.server.listening) {
       await new Promise<void>((resolve) => this.server.close(() => resolve()));
     }
@@ -133,13 +118,11 @@ export class RtspLoopbackBridge {
     this.urlValue = undefined;
   }
 
-  /**
-   * Start Internal.
-   */
+  /** Selects the H.264 track, subscribes to packets, and opens a local port. */
   private async startInternal(): Promise<string> {
     const track = h264Track(this.options.source.tracks);
     if (track === undefined) throw new Error('RTSP bridge source has no H.264 video track.');
-    this.setTrack(track, false);
+    this.media.setTrack(track, false);
     this.unsubscribe = this.options.source.subscribeMediaPackets((packet) => this.capture(packet));
     try {
       await new Promise<void>((resolve, reject) => {
@@ -164,9 +147,7 @@ export class RtspLoopbackBridge {
     }
   }
 
-  /**
-   * Accept.
-   */
+  /** Accepts a client within the configured limit and attaches its parser. */
   private accept(socket: Socket): void {
     socket.setNoDelay(true);
     if (this.clients.size >= this.maximumClients) {
@@ -189,14 +170,15 @@ export class RtspLoopbackBridge {
   }
 
   /**
-   * Receive.
-   * @param chunk A complete variable-length RTP or RTCP packet. RTP starts with a 12-byte fixed header; RTCP starts with a four-byte common header. RTSP interleaved framing, when used, adds four bytes.
+   * Parses incoming client bytes and delegates complete RTSP messages.
+   * @param chunk Arbitrary TCP stream bytes, possibly a partial request,
+   * multiple requests, or a four-byte interleaved header plus packet bytes.
    */
   private receive(client: BridgeClient, chunk: Buffer): void {
     try {
       for (const item of client.parser.push(chunk)) {
         if (item.type === 'interleaved-frame') continue;
-        this.handleRequest(client, item);
+        this.requests.handle(client, item);
       }
     } catch (error) {
       this.reportError(error instanceof Error ? error : new Error(String(error)));
@@ -204,225 +186,25 @@ export class RtspLoopbackBridge {
     }
   }
 
-  /**
-   * Negotiates a loopback RTSP client and its interleaved RTP/RTCP channels.
-   * PLAY starts forwarding only after SETUP has selected valid channels.
-   */
-  private handleRequest(client: BridgeClient, request: RtspMessage): void {
-    if (request.startLine.type !== 'request') {
-      this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspBadRequest, 'Bad Request');
-      return;
-    }
-    const method = request.startLine.method.toUpperCase();
-    if (!this.validRequestUri(request.startLine.uri, method)) {
-      this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspNotFound, 'Not Found');
-      return;
-    }
-    switch (method) {
-      case 'OPTIONS':
-        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
-          Public: 'OPTIONS, DESCRIBE, SETUP, PLAY, PAUSE, GET_PARAMETER, SET_PARAMETER, TEARDOWN',
-        });
-        return;
-      case 'DESCRIBE': {
-        const body = Buffer.from(this.createSdp(), 'utf8');
-        this.respond(
-          client,
-          request,
-          STREAM_ADAPTER_CONSTANTS.rtspOk,
-          'OK',
-          {
-            'Content-Type': 'application/sdp',
-            'Content-Base': `${this.urlValue as string}/`,
-          },
-          body,
-        );
-        return;
-      }
-      case 'SETUP': {
-        const channels = parseInterleavedChannels(request.headers.get('transport'));
-        if (channels === undefined) {
-          this.respond(
-            client,
-            request,
-            STREAM_ADAPTER_CONSTANTS.rtspUnsupportedTransport,
-            'Unsupported Transport',
-          );
-          return;
-        }
-        client.rtpChannel = channels.rtpChannel;
-        client.rtcpChannel = channels.rtcpChannel;
-        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
-          Session: `${client.sessionId};timeout=60`,
-          Transport: `RTP/AVP/TCP;unicast;interleaved=${client.rtpChannel}-${client.rtcpChannel}`,
-        });
-        return;
-      }
-      case 'PLAY':
-        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
-          Session: client.sessionId,
-          Range: 'npt=0.000-',
-          'RTP-Info': `url=${this.urlValue as string}/trackID=0`,
-        });
-        client.playing = true;
-        for (const frame of this.preroll) this.sendFrame(client, frame);
-        return;
-      case 'PAUSE':
-        client.playing = false;
-        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
-          Session: client.sessionId,
-        });
-        return;
-      case 'GET_PARAMETER':
-      case 'SET_PARAMETER':
-        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
-          Session: client.sessionId,
-        });
-        return;
-      case 'TEARDOWN':
-        client.playing = false;
-        this.respond(client, request, STREAM_ADAPTER_CONSTANTS.rtspOk, 'OK', {
-          Session: client.sessionId,
-        });
-        client.socket.end();
-        return;
-      default:
-        this.respond(
-          client,
-          request,
-          STREAM_ADAPTER_CONSTANTS.rtspMethodNotAllowed,
-          'Method Not Allowed',
-        );
-    }
-  }
-
-  /**
-   * Respond.
-   */
-  private respond(
-    client: BridgeClient,
-    request: RtspMessage,
-    status: number,
-    statusText: string,
-    headers: Readonly<Record<string, string>> = {},
-    body = Buffer.alloc(0),
-  ): void {
-    const cseq = request.headers.get('cseq');
-    if (cseq === undefined) {
-      client.socket.destroy(new Error('Local RTSP client omitted CSeq.'));
-      return;
-    }
-    const allHeaders: Record<string, string> = {
-      CSeq: cseq,
-      Server: 'ain-nvr/0.1',
-      ...headers,
-      'Content-Length': String(body.length),
-    };
-    const head = Buffer.from(
-      `RTSP/1.0 ${status} ${statusText}\r\n${Object.entries(allHeaders)
-        .map(([name, value]) => `${name}: ${value}\r\n`)
-        .join('')}\r\n`,
-      'ascii',
-    );
-    client.socket.write(body.length === 0 ? head : Buffer.concat([head, body]));
-  }
-
-  /**
-   * Valid Request Uri.
-   */
-  private validRequestUri(uri: string, method: string): boolean {
-    if (method === 'OPTIONS' && uri === '*') return true;
-    try {
-      const parsed = new URL(uri);
-      return (
-        parsed.hostname === '127.0.0.1' &&
-        (parsed.pathname === `/${this.token}` ||
-          parsed.pathname === `/${this.token}/` ||
-          parsed.pathname === `/${this.token}/trackID=0`)
-      );
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Builds the SDP description advertised to an RTSP client.
-   */
-  private createSdp(): string {
-    const track = this.currentTrack as TrackDescription;
-    const configuration = this.configuration;
-    const fmtp =
-      configuration === undefined
-        ? 'packetization-mode=1'
-        : `packetization-mode=1;profile-level-id=${configuration.decoder.codec.slice(STREAM_ADAPTER_CONSTANTS.h264CodecPrefixLength)};` +
-          `sprop-parameter-sets=${configuration.sps.toString('base64')},` +
-          configuration.pps.toString('base64');
-    return [
-      'v=0',
-      `o=- ${Date.now()} 1 IN IP4 127.0.0.1`,
-      's=ain-nvr loopback bridge',
-      'c=IN IP4 127.0.0.1',
-      't=0 0',
-      'a=control:*',
-      'a=range:npt=0-',
-      `m=video 0 RTP/AVP ${track.payloadType}`,
-      `a=rtpmap:${track.payloadType} H264/${track.clockRate}`,
-      `a=fmtp:${track.payloadType} ${fmtp}`,
-      'a=control:trackID=0',
-      'a=sendonly',
-      '',
-    ].join('\r\n');
-  }
-
-  /**
-   * Capture.
-   */
+  /** Buffers one source packet, then forwards it to playing clients. */
   private capture(packet: MediaPacket): void {
-    const track = packet.track;
-    if (track?.mediaType !== 'video' || track.codec !== 'h264') return;
-    const isRtcp = packet.channel === track.rtcpChannel;
-    if (!isRtcp && (packet.channel !== track.rtpChannel || packet.rtp === undefined)) return;
-
-    if (
-      this.currentTrack === undefined ||
-      trackSignature(this.currentTrack) !== trackSignature(track)
-    ) {
-      this.setTrack(track, true);
-    }
-    if (!isRtcp && packet.rtp !== undefined) {
-      const reset =
-        (this.currentSsrc !== undefined && this.currentSsrc !== packet.rtp.ssrc) ||
-        (this.currentTimestamp !== undefined &&
-          (signedTimestampDelta(packet.rtp.timestamp, this.currentTimestamp) *
-            STREAM_ADAPTER_CONSTANTS.millisecondsPerSecond) /
-            track.clockRate <
-            -STREAM_ADAPTER_CONSTANTS.maximumTimestampRegressionMs);
-      if (reset) this.resetMedia(true);
-      this.currentSsrc = packet.rtp.ssrc;
-      this.currentTimestamp = packet.rtp.timestamp;
-      const learned = this.configurationTracker.push(packet.rtp.payload, packet.rtp.timestamp);
-      if (learned !== undefined) this.configuration = learned;
-    }
-
-    const frame: BufferedFrame = { isRtcp, payload: Buffer.from(packet.frame.payload) };
-    this.preroll.push(frame);
-    this.prerollBytes += frame.payload.length + STREAM_ADAPTER_CONSTANTS.interleavedHeaderBytes;
-    while (
-      this.preroll.length > this.maximumPrerollPackets ||
-      this.prerollBytes > this.maximumPrerollBytes
-    ) {
-      const removed = this.preroll.shift();
-      if (removed === undefined) break;
-      this.prerollBytes -= removed.payload.length + STREAM_ADAPTER_CONSTANTS.interleavedHeaderBytes;
-    }
+    const frame = this.media.capture(packet);
+    if (frame === undefined) return;
     for (const client of this.clients) {
       if (client.playing) this.sendFrame(client, frame);
     }
   }
 
+  /** Replays bounded preroll after the PLAY response is sent. */
+  private replayPreroll(client: BridgeClient): void {
+    for (const frame of this.media.prerollFrames) this.sendFrame(client, frame);
+  }
+
   /**
-   * Sends frame.
-   * @param frame A complete variable-length RTP or RTCP packet. RTP starts with a 12-byte fixed header; RTCP starts with a four-byte common header. RTSP interleaved framing, when used, adds four bytes.
+   * Sends one complete source RTP or RTCP packet on the negotiated channel.
+   * @param frame Its payload is a complete variable-length RTP packet with a
+   * 12-byte fixed header, or RTCP packet with a four-byte common header. This
+   * method adds the four-byte RTSP interleaved prefix before writing.
    */
   private sendFrame(client: BridgeClient, frame: BufferedFrame): void {
     if (client.socket.destroyed) return;
@@ -439,44 +221,12 @@ export class RtspLoopbackBridge {
     this.forwardedPackets += 1;
   }
 
-  /**
-   * Set Track.
-   */
-  private setTrack(track: TrackDescription, disconnectClients: boolean): void {
-    this.currentTrack = track;
-    this.configurationTracker = new H264ConfigurationTracker();
-    this.configuration = undefined;
-    if (track.parameterSets !== undefined) {
-      try {
-        this.configuration = createH264CodecConfiguration(
-          track.parameterSets.sps,
-          track.parameterSets.pps,
-        );
-        this.configurationTracker.seed(track.parameterSets.sps, track.parameterSets.pps);
-      } catch {
-        // A valid in-band configuration may arrive later.
-      }
-    }
-    this.resetMedia(disconnectClients, false);
+  /** Closes clients whose transport no longer matches the source track. */
+  private disconnectClients(): void {
+    for (const client of this.clients) client.socket.destroy();
   }
 
-  /**
-   * Reset Media.
-   */
-  private resetMedia(disconnectClients: boolean, resetConfiguration = true): void {
-    this.preroll.length = 0;
-    this.prerollBytes = 0;
-    this.currentSsrc = undefined;
-    this.currentTimestamp = undefined;
-    if (resetConfiguration) this.configurationTracker.resetFragments();
-    if (disconnectClients) {
-      for (const client of this.clients) client.socket.destroy();
-    }
-  }
-
-  /**
-   * Report Error.
-   */
+  /** Reports socket or parser failures through the caller's error callback. */
   private reportError(error: Error): void {
     this.options.onError?.(error);
   }

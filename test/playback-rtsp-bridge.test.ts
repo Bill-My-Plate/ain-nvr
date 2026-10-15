@@ -6,6 +6,7 @@ import type { PlaybackMessage } from '../src/playback/types/playback-message.typ
 import { createH264CodecConfiguration } from '../src/h264/utils/create-h264-codec-configuration.util.js';
 import { parseRtpPacket } from '../src/rtp-parser/utils/parse-rtp-packet.util.js';
 import { PlaybackRtspBridge } from '../src/stream-adapters/services/playback-rtsp-bridge.class.js';
+import { PlaybackRtspServer } from '../src/stream-adapters/services/playback-rtsp-server.class.js';
 import { createBaselineSps } from './helpers/media.js';
 
 class RtspTestClient {
@@ -227,5 +228,92 @@ test('playback bridge rejects packets beyond its client queue bound', async () =
   } finally {
     socket?.destroy();
     await bridge.stop();
+  }
+});
+
+test('playback bridge rejects an audio format change after PLAY', async () => {
+  const playback = (async function* (): AsyncGenerator<PlaybackMessage> {
+    for await (const message of playbackMessages()) {
+      yield message.kind === 'audio' ? { ...message, sampleRate: 16_000 } : message;
+    }
+  })();
+  const bridge = new PlaybackRtspBridge({ playback, audioSampleRate: 8_000 });
+  let socket: Socket | undefined;
+  try {
+    const started = await bridge.start();
+    const parsedUrl = new URL(started.url);
+    socket = net.connect(Number(parsedUrl.port), parsedUrl.hostname);
+    await new Promise<void>((resolve, reject) => {
+      socket?.once('connect', resolve);
+      socket?.once('error', reject);
+    });
+    const client = new RtspTestClient(socket);
+    await client.request(
+      request(
+        'SETUP',
+        `${started.url}/trackID=0`,
+        1,
+        'Transport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n',
+      ),
+    );
+    const rejected = assert.rejects(
+      bridge.run(),
+      /Playback audio format changed during RTSP bridging/u,
+    );
+    await client.request(request('PLAY', started.url, 2));
+    await rejected;
+    await assert.rejects(bridge.run(), /Playback RTSP bridge is stopped/u);
+  } finally {
+    socket?.destroy();
+    await bridge.stop();
+  }
+});
+
+
+test('playback RTSP server preserves control request responses', async () => {
+  const server = new PlaybackRtspServer({
+    configuration,
+    videoRtpInfo: { initialSequenceNumber: 7, initialTimestamp: 90_000 },
+  });
+  let socket: Socket | undefined;
+  try {
+    const url = await server.start();
+    const parsedUrl = new URL(url);
+    socket = net.connect(Number(parsedUrl.port), parsedUrl.hostname);
+    await new Promise<void>((resolve, reject) => {
+      socket?.once('connect', resolve);
+      socket?.once('error', reject);
+    });
+    const client = new RtspTestClient(socket);
+    const options = await client.request(request('OPTIONS', '*', 1));
+    assert.match(options.toString('ascii'), /RTSP\/1\.0 200 OK/u);
+    assert.match(options.toString('ascii'), /Public: OPTIONS, DESCRIBE, SETUP, PLAY, GET_PARAMETER, TEARDOWN/u);
+
+    const unsupportedAudio = await client.request(
+      request(
+        'SETUP',
+        `${url}/trackID=1`,
+        2,
+        'Transport: RTP/AVP/TCP;unicast;interleaved=2-3\r\n',
+      ),
+    );
+    assert.match(unsupportedAudio.toString('ascii'), /RTSP\/1\.0 461 Unsupported Transport/u);
+
+    const unsupportedTransport = await client.request(
+      request(
+        'SETUP',
+        `${url}/trackID=0`,
+        3,
+        'Transport: RTP/AVP;unicast;client_port=5000-5001\r\n',
+      ),
+    );
+    assert.match(unsupportedTransport.toString('ascii'), /RTSP\/1\.0 461 Unsupported Transport/u);
+    const keepAlive = await client.request(request('GET_PARAMETER', url, 4));
+    assert.match(keepAlive.toString('ascii'), /RTSP\/1\.0 200 OK/u);
+    const teardown = await client.request(request('TEARDOWN', url, 5));
+    assert.match(teardown.toString('ascii'), /RTSP\/1\.0 200 OK/u);
+  } finally {
+    socket?.destroy();
+    await server.stop();
   }
 });

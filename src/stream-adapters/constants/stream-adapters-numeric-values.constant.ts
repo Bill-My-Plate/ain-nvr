@@ -8,6 +8,8 @@ export const STREAM_ADAPTER_CONSTANTS = {
   maximumPort: 65_535,
   defaultMaximumPendingPackets: 1_024,
   defaultPlayTimeoutMs: 15_000,
+  playbackSessionTimeoutSeconds: 60,
+  loopbackSessionTimeoutSeconds: 60,
   millisecondsPerSecond: 1_000,
   microsecondsPerSecond: 1_000_000,
   rtpPayloadTypeMax: 127,

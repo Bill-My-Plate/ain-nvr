@@ -4,7 +4,7 @@ Adapts media streams to network transport. It serves a local RTSP stream, bridge
 
 ## How it works
 
-RtspLoopbackBridge exposes a live packet source through a local RTSP server. PlaybackRtspBridge drives a playback server with packetized media. RtpUdpForwarder forwards negotiated tracks to configured UDP destinations. These services own sockets and client lifecycle.
+RtspLoopbackBridge owns the local listener and clients. Its media state tracks H.264 configuration, preroll, source changes, and timestamp resets; its request handler negotiates RTSP control and sends preroll after PLAY. PlaybackRtspBridge owns playback startup, server readiness, and shutdown. An internal replay utility packetizes the media after the RTSP client starts PLAY, using the first video frame as the timestamp origin. RtpUdpForwarder forwards negotiated tracks to configured UDP destinations. PlaybackRtspServer owns the listener, one client socket, and the PLAY waiter. Its internal request handler owns RTSP control responses and SDP; a packet sender owns interleaved framing and socket backpressure. The services own sockets and client lifecycle.
 
 **Internal entry point:** [`index.ts`](index.ts). Cross-module imports use this entry point. Published package subpaths are defined by `src/exports/` and `package.json`.
 

@@ -1,5 +1,4 @@
 import { STREAM_ADAPTER_CONSTANTS } from '../constants/stream-adapters-numeric-values.constant.js';
-import type { PlaybackMessage } from '../../playback/index.js';
 import { RtpPacketizer } from './rtp-packetizer.class.js';
 import { PlaybackRtspServer } from './playback-rtsp-server.class.js';
 
@@ -7,6 +6,9 @@ import type { PlaybackVideoMessage } from '../types/playback-video-message.type.
 import type { PlaybackRtspBridgeOptions } from '../types/playback-rtsp-bridge-options.interface.js';
 import type { PlaybackRtspBridgeStart } from '../types/playback-rtsp-bridge-start.interface.js';
 import { prependMessage } from '../utils/prepend-message.util.js';
+import { replayPlaybackRtsp } from '../utils/replay-playback-rtsp.util.js';
+import { throwIfPlaybackAborted } from '../utils/throw-if-playback-aborted.util.js';
+
 /**
  * Feeds recorded playback media to a local RTSP server and owns its lifecycle.
  */
@@ -95,10 +97,10 @@ export class PlaybackRtspBridge {
   }
 
   /**
-   * Start Internal.
+   * Reads playback configuration and the first safe video frame before opening the RTSP server.
    */
   private async startInternal(): Promise<PlaybackRtspBridgeStart> {
-    this.throwIfAborted();
+    throwIfPlaybackAborted(this.options.signal);
     try {
       const ready = await this.options.playback.next();
       if (ready.done || ready.value.kind !== 'ready') {
@@ -146,11 +148,24 @@ export class PlaybackRtspBridge {
 
     try {
       await server.waitForPlay(this.options.signal, this.options.playTimeoutMs);
-      await this.replay(
-        prependMessage(firstVideo, this.options.playback),
+      await replayPlaybackRtsp({
+        playback: prependMessage(firstVideo, this.options.playback),
         server,
-        started.actualStartTimeMs,
-      );
+        videoPacketizer: this.videoPacketizer,
+        ...(this.audioPacketizer === undefined
+          ? {}
+          : { audioPacketizer: this.audioPacketizer }),
+        actualStartTimeMs: started.actualStartTimeMs,
+        ...(this.options.endTimeMs === undefined
+          ? {}
+          : { endTimeMs: this.options.endTimeMs }),
+        ...(this.options.audioSampleRate === undefined
+          ? {}
+          : { audioSampleRate: this.options.audioSampleRate }),
+        ...(this.options.signal === undefined
+          ? {}
+          : { signal: this.options.signal }),
+      });
       await server.finish();
     } catch (error) {
       await this.stop();
@@ -159,81 +174,12 @@ export class PlaybackRtspBridge {
   }
 
   /**
-   * Replay.
-   */
-  private async replay(
-    playback: AsyncGenerator<PlaybackMessage>,
-    server: PlaybackRtspServer,
-    actualStartTimeMs: number,
-  ): Promise<void> {
-    const video = this.videoPacketizer;
-    const audio = this.audioPacketizer;
-    let sentVideo = false;
-
-    for await (const message of playback) {
-      this.throwIfAborted();
-      if (message.kind !== 'video' && message.kind !== 'audio') continue;
-      if (message.kind === 'video' && this.atOrAfterEnd(message.wallClockTimeMs)) break;
-      if (message.kind === 'audio' && this.atOrAfterEnd(message.wallClockTimeMs)) continue;
-      const timestampUs = Math.max(
-        0,
-        Math.round(
-          (message.wallClockTimeMs - actualStartTimeMs) *
-            STREAM_ADAPTER_CONSTANTS.millisecondsPerSecond,
-        ),
-      );
-
-      if (message.kind === 'video') {
-        const packets = video.packetizeH264(message.data, timestampUs);
-        for (const packet of packets) await server.sendVideo(packet);
-        if (packets.length > 0) sentVideo = true;
-        continue;
-      }
-
-      if (audio !== undefined) {
-        if (
-          message.sampleFormat !== 's16le' ||
-          message.sampleRate !== this.options.audioSampleRate ||
-          message.channels !== 1
-        ) {
-          throw new Error('Playback audio format changed during RTSP bridging.');
-        }
-        for (const packet of audio.packetizePcmS16Le(message.data, timestampUs)) {
-          await server.sendAudio(packet);
-        }
-      }
-    }
-
-    if (!sentVideo) {
-      throw new Error('Playback interval contains no exportable video frames.');
-    }
-  }
-
-  /**
-   * Stop Internal.
+   * Closes the playback generator and its local RTSP server.
    */
   private async stopInternal(): Promise<void> {
     await this.options.playback.return(undefined).catch(() => undefined);
     await this.server?.stop();
     this.server = undefined;
     this.firstVideo = undefined;
-  }
-
-  /**
-   * At Or After End.
-   */
-  private atOrAfterEnd(wallClockTimeMs: number): boolean {
-    return this.options.endTimeMs !== undefined && wallClockTimeMs >= this.options.endTimeMs;
-  }
-
-  /**
-   * Throw If Aborted.
-   */
-  private throwIfAborted(): void {
-    if (this.options.signal?.aborted === true) {
-      throw this.options.signal.reason instanceof Error
-        ? this.options.signal.reason
-        : new Error('Playback RTSP bridge aborted.');
-    }
   }
 }

@@ -163,3 +163,28 @@ test('shared extractor opens only the loopback URL and emits a JPEG', async () =
   assert.equal(source.unsubscriptions, 1);
   assert.equal(contextClosed, true);
 });
+
+test('loopback bridge clears preroll and disconnects a client when the video track changes', async () => {
+  const source = new FakePacketSource();
+  const bridge = new RtspLoopbackBridge({ source });
+  const client = new RtspClient({ url: await bridge.start(), mediaTimeoutMs: 60_000 });
+  try {
+    await client.connect();
+    const disconnected = withTimeout(new Promise<void>((resolve) => {
+      client.once('disconnect', () => resolve());
+    }));
+    source.emit(mediaPacket(1, 90_000, Buffer.from([0x65, 1, 2])));
+    const changedTrack = { ...videoTrack, payloadType: 97 };
+    source.emit(mediaPacket(2, 180_000, Buffer.from([0x65, 3, 4]), {
+      track: changedTrack,
+    }));
+    await disconnected;
+    assert.equal(bridge.status.prerollPackets, 1);
+    assert.equal(bridge.status.clientCount, 0);
+    assert.equal(source.unsubscriptions, 0);
+  } finally {
+    await client.close();
+    await bridge.stop();
+  }
+  assert.equal(source.unsubscriptions, 1);
+});
