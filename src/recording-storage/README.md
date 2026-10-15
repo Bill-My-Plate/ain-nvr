@@ -4,7 +4,7 @@ Persists recording packets and metadata to disk. It writes temporary segment fil
 
 ## How it works
 
-The segment writer coordinates packet offsets, metadata, rotation, and finalization. File publication uses atomic rename helpers so readers do not see partially committed segments. PacketLocation points to an offset in the stored byte stream.
+`RecordingSegmentWriter` coordinates packet writes with complete parser index batches. Its private session manager reserves session IDs and handles codec metadata changes; its file manager checks disk space, writes partial media, and publishes completed files. Index events update the segment that owns each packet location. File publication uses atomic rename helpers so readers do not see partially committed segments. `PacketLocation` points to an offset in the stored byte stream.
 
 **Internal entry point:** [`index.ts`](index.ts). Cross-module imports use this entry point. Published package subpaths are defined by `src/exports/` and `package.json`.
 

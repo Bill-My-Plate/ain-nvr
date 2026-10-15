@@ -7,6 +7,7 @@ export const RECORDING_STORAGE_CONSTANTS = {
   defaultPlaypointIntervalMs: 2_000,
   defaultMinimumFreeBytes: 512 * 1024 * 1024,
   defaultSegmentDurationMs: 10_000,
+  diskCheckIntervalMs: 10_000,
   jsonIndentSpaces: 2,
   maximumRenameAttempts: 8,
   renameBackoffBase: 2,

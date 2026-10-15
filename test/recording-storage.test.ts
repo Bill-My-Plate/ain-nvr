@@ -8,6 +8,7 @@ import { RecordingFileUtil } from '../src/recording-storage/services/recording-f
 import type { CommittedSegment } from '../src/recording-storage/types/committed-segment.type.js';
 import { createBaselineSps, mediaPacket, videoTrack } from './helpers/media.js';
 import { RecordingParser } from '../src/recording-parser/services/recording-parser.class.js';
+import { createH264CodecConfiguration } from '../src/h264/index.js';
 
 const sessionInfo = { sdp: 'v=0\r\n', tracks: [{ ...videoTrack, control: 'track1', parameterSets: {
   sps: createBaselineSps(), pps: Buffer.from([0x68, 0xaa]),
@@ -85,6 +86,53 @@ test('atomic publication retries only transient Windows rename failures', async 
     calls++; throw Object.assign(new Error('denied'), { code: 'EACCES' });
   }), /denied/);
   assert.equal(calls, 1);
+});
+
+test('codec change starts a new session only after the old index batch commits', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ain-writer-codec-'));
+  const committed: CommittedSegment[] = [];
+  const closed: number[] = [];
+  let configurationChanges = 0;
+  try {
+    const writer = await RecordingSegmentWriter.create({
+      cameraId: 'camera',
+      cacheRoot: root,
+      sessionInfo,
+      sessionStartMs: 1_000,
+      segmentDurationMs: 10_000,
+      onCommitted: (segment) => committed.push(segment),
+      onSessionClosed: (_cameraId, sessionStartMs) => closed.push(sessionStartMs),
+      onConfigurationChanged: () => { configurationChanges += 1; },
+    });
+    await writer.write({
+      packet: mediaPacket(1, 90_000, Buffer.from([0x65, 1]), { arrivalTimeMs: 2_000 }),
+      boundaryBefore: true,
+      discontinuityBefore: false,
+    });
+    const configuration = createH264CodecConfiguration(
+      createBaselineSps(),
+      Buffer.from([0x68, 0xab]),
+    );
+    await writer.applyEvents([{ type: 'configuration', trackId: 'video', configuration }]);
+    assert.equal(configurationChanges, 1);
+    assert.equal(committed.length, 0);
+    await writer.write({
+      packet: mediaPacket(2, 99_000, Buffer.from([0x65, 2]), { arrivalTimeMs: 3_000 }),
+      boundaryBefore: true,
+      discontinuityBefore: false,
+    });
+    assert.deepEqual(closed, []);
+    await writer.completeBatch();
+    assert.deepEqual(closed, [1_000]);
+    assert.equal(committed.length, 1);
+    const nextSession = JSON.parse(await readFile(join(root, 'camera', '3000', 'session.json'), 'utf8'));
+    assert.equal(nextSession.tracks[0].parameterSetsBase64.pps, configuration.pps.toString('base64'));
+    await writer.close();
+    assert.deepEqual(closed, [1_000, 3_000]);
+    assert.equal(committed.length, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('missing IDR termination is bounded before writer access', async () => {
