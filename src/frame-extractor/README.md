@@ -4,7 +4,9 @@ Turns live RTSP video into sampled JPEG frames. It selects a usable decoder, loa
 
 ## How it works
 
-The URL extractor owns its libav runtime and stop signal. The shared extractor owns a loopback bridge and delegates decoding to the URL extractor. Decoder candidates depend on host hardware and available libav codecs. The native addon preload path must stay compatible with pkg.
+The URL extractor owns its stop signal, status counters, and reconnect policy. Each `RtspFrameSession` owns one libav context and decoder. Its `FrameInactivityWatchdog` closes a stalled context; its `FrameJpegQueue` encodes one frame and retains at most one waiting frame. Native frames are destroyed after JPEG encoding, before the consumer callback. Session cleanup destroys the waiting frame, waits for the active callback, destroys the decoder, and closes the context. Completed reconnect delays remove their abort listeners. The shared extractor owns a loopback bridge and closes it on startup or shutdown failure. Decoder candidates depend on host hardware and available libav codecs. The native addon preload path must stay compatible with pkg.
+
+`RtspFrameSession`, `FrameJpegQueue`, `FrameInactivityWatchdog`, and their option types are private implementation files. They are not exported from `index.ts`.
 
 **Internal entry point:** [`index.ts`](index.ts). Cross-module imports use this entry point. Published package subpaths are defined by `src/exports/` and `package.json`.
 

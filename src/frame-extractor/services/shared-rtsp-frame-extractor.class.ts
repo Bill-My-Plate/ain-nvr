@@ -47,17 +47,25 @@ export class SharedRtspFrameExtractor {
    */
   public async stop(): Promise<void> {
     await this.startPromise?.catch(() => undefined);
-    await this.extractor?.stop();
-    await this.bridge.stop();
+    try {
+      await this.extractor?.stop();
+    } finally {
+      await this.bridge.stop();
+    }
   }
 
   /**
    * Start Internal.
    */
   private async startInternal(): Promise<void> {
-    const url = await this.bridge.start();
-    const { source: _source, bridge: _bridge, ...extractorOptions } = this.options;
-    this.extractor = new RtspUrlFrameExtractor({ ...extractorOptions, url });
-    this.extractor.start();
+    try {
+      const url = await this.bridge.start();
+      const { source: _source, bridge: _bridge, ...extractorOptions } = this.options;
+      this.extractor = new RtspUrlFrameExtractor({ ...extractorOptions, url });
+      this.extractor.start();
+    } catch (error) {
+      await this.bridge.stop();
+      throw error;
+    }
   }
 }

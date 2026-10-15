@@ -164,6 +164,56 @@ test('shared extractor opens only the loopback URL and emits a JPEG', async () =
   assert.equal(contextClosed, true);
 });
 
+test('shared extractor closes the bridge when URL extractor construction fails', async () => {
+  const source = new FakePacketSource();
+  const extractor = new SharedRtspFrameExtractor({
+    id: 'invalid',
+    source,
+    runtime: {
+      keyPacketFlag: 1,
+      initialize: async () => undefined,
+      createFormatContext: () => { throw new Error('should not create context'); },
+      toJpeg: async () => Buffer.alloc(0),
+    },
+    onFrame: () => undefined,
+    framesPerSecond: 0,
+  });
+
+  try {
+    await assert.rejects(extractor.start(), /framesPerSecond/);
+    assert.equal(source.subscriptions, 1);
+    assert.equal(source.unsubscriptions, 1);
+    assert.equal(extractor.bridgeStatus.running, false);
+  } finally {
+    await extractor.stop();
+  }
+});
+
+test('shared extractor closes the bridge when decoder shutdown rejects', async () => {
+  const source = new FakePacketSource();
+  const extractor = new SharedRtspFrameExtractor({
+    id: 'failed-runtime',
+    source,
+    runtime: {
+      keyPacketFlag: 1,
+      initialize: async () => { throw new Error('runtime unavailable'); },
+      createFormatContext: () => { throw new Error('should not create context'); },
+      toJpeg: async () => Buffer.alloc(0),
+    },
+    onFrame: () => undefined,
+    onError: () => { throw new Error('callback failure'); },
+  });
+
+  try {
+    await extractor.start();
+    await assert.rejects(extractor.stop(), /callback failure/);
+    assert.equal(source.unsubscriptions, 1);
+    assert.equal(extractor.bridgeStatus.running, false);
+  } finally {
+    await (Reflect.get(extractor, 'bridge') as RtspLoopbackBridge).stop();
+  }
+});
+
 test('loopback bridge clears preroll and disconnects a client when the video track changes', async () => {
   const source = new FakePacketSource();
   const bridge = new RtspLoopbackBridge({ source });

@@ -1,24 +1,13 @@
 import { FRAME_EXTRACTOR_CONSTANTS } from '../constants/frame-extractor-numeric-values.constant.js';
-import { AinNvrError } from '../../shared/index.js';
-import { decoderCandidates } from '../utils/decoder-candidates.util.js';
-import { detectDecoderHostCapabilities } from '../utils/detect-decoder-host-capabilities.util.js';
-import { isSaneFrame } from '../utils/is-sane-frame.util.js';
-import { selectDecoder } from '../utils/select-decoder.util.js';
-import { type DecoderHostCapabilities } from '../types/decoder-host-capabilities.interface.js';
-import { FrameSampler } from './frame-sampler.class.js';
-import type { LibavDecoderLike } from '../types/libav-decoder-like.type.js';
-import type { LibavFormatContextLike } from '../types/libav-format-context-like.type.js';
-import type { LibavFrameLike } from '../types/libav-frame-like.type.js';
-
+import type { DecoderHostCapabilities } from '../types/decoder-host-capabilities.interface.js';
 import type { FrameExtractorState } from '../types/frame-extractor-state.type.js';
 import type { RtspUrlFrameExtractorOptions } from '../types/rtsp-url-frame-extractor-options.interface.js';
-import type { QueuedFrame } from '../types/queued-frame.type.js';
-import { positiveInteger } from '../utils/positive-integer.util.js';
 import { delay } from '../utils/delay.util.js';
-import { selectH264Stream } from '../utils/select-h264-stream.util.js';
-/**
- * Connects to an RTSP URL, decodes video, and delivers sampled JPEG frames.
- */
+import { detectDecoderHostCapabilities } from '../utils/detect-decoder-host-capabilities.util.js';
+import { positiveInteger } from '../utils/positive-integer.util.js';
+import { RtspFrameSession } from './rtsp-frame-session.class.js';
+
+/** Connects to an RTSP URL and retries individual decoding sessions until stopped. */
 export class RtspUrlFrameExtractor {
   private readonly framesPerSecond: number;
   private readonly jpegQuality: number;
@@ -30,15 +19,14 @@ export class RtspUrlFrameExtractor {
   private readonly monotonicNow: () => bigint;
   private readonly stopController = new AbortController();
   private runPromise: Promise<void> | undefined;
-  private activeContext: LibavFormatContextLike | undefined;
+  private activeSession: RtspFrameSession | undefined;
   private stateValue: FrameExtractorState = 'idle';
   private frameNumber = 0;
   private decodedFrames = 0;
   private emittedFrames = 0;
   private droppedFrames = 0;
-  /**
-   * Creates the instance and initializes its state.
-   */
+
+  /** Validates the public settings and resolves defaults. */
   public constructor(private readonly options: RtspUrlFrameExtractorOptions) {
     this.framesPerSecond =
       options.framesPerSecond ?? FRAME_EXTRACTOR_CONSTANTS.defaultFramesPerSecond;
@@ -73,26 +61,19 @@ export class RtspUrlFrameExtractor {
     this.monotonicNow = options.monotonicNow ?? process.hrtime.bigint;
   }
 
-  /**
-   * Returns the current lifecycle state.
-   */
+  /** Returns the current lifecycle state. */
   public get state(): FrameExtractorState {
     return this.stateValue;
   }
 
-  /**
-   * Returns a snapshot of the current status.
-   */
+  /** Returns a snapshot of decoded, delivered, and queue-rejected frames. */
   public get status(): Readonly<{
     /** Current extractor lifecycle state. */
     state: FrameExtractorState;
-
     /** Number of decoded frames seen by the extractor. */
     decodedFrames: number;
-
     /** Number of JPEG frames delivered to callbacks. */
     emittedFrames: number;
-
     /** Number of frames skipped or rejected. */
     droppedFrames: number;
   }> {
@@ -104,9 +85,7 @@ export class RtspUrlFrameExtractor {
     };
   }
 
-  /**
-   * Starts the operation and initializes its resources.
-   */
+  /** Initializes the runtime and starts retrying RTSP sessions. */
   public start(): void {
     this.runPromise ??= this.run().catch((error: unknown) => {
       const failure = error instanceof Error ? error : new Error(String(error));
@@ -115,22 +94,17 @@ export class RtspUrlFrameExtractor {
     });
   }
 
-  /**
-   * Stops active work and releases owned resources.
-   */
+  /** Cancels retries, closes the active context, and waits for cleanup. */
   public async stop(): Promise<void> {
     if (!this.stopController.signal.aborted) {
       this.stopController.abort(new Error('Frame extractor stopped.'));
     }
-    await this.activeContext?.close().catch(() => undefined);
+    await this.activeSession?.stop();
     await this.runPromise;
     this.stateValue = 'stopped';
   }
 
-  /**
-   * Reconnects the demux/decoder session until stopped. A session that decoded
-   * frames resets the retry delay; other failures increase it up to the cap.
-   */
+  /** Reconnects after a failed session, resetting delay if any frame was decoded. */
   private async run(): Promise<void> {
     await this.options.runtime.initialize();
     let reconnectMs = this.reconnectInitialMs;
@@ -138,7 +112,29 @@ export class RtspUrlFrameExtractor {
       const decodedBefore = this.decodedFrames;
       this.stateValue = this.stateValue === 'idle' ? 'connecting' : 'reconnecting';
       try {
-        await this.runSession();
+        const session = new RtspFrameSession({
+          url: this.options.url,
+          runtime: this.options.runtime,
+          stopSignal: this.stopController.signal,
+          mediaTimeoutMs: this.mediaTimeoutMs,
+          framesPerSecond: this.framesPerSecond,
+          jpegQuality: this.jpegQuality,
+          capabilities: this.capabilities,
+          now: this.now,
+          monotonicNow: this.monotonicNow,
+          onFrame: this.options.onFrame,
+          onState: (state) => { this.stateValue = state; },
+          onDecoded: () => { this.decodedFrames += 1; },
+          onEmitted: () => { this.emittedFrames += 1; },
+          onDropped: () => { this.droppedFrames += 1; },
+          nextFrameNumber: () => this.frameNumber++,
+        });
+        this.activeSession = session;
+        try {
+          await session.run();
+        } finally {
+          if (this.activeSession === session) this.activeSession = undefined;
+        }
         if (!this.stopController.signal.aborted)
           throw new Error('Decoded stream ended unexpectedly.');
       } catch (error) {
@@ -156,154 +152,6 @@ export class RtspUrlFrameExtractor {
           this.reconnectMaximumMs,
         );
       }
-    }
-  }
-
-  /**
-   * Owns one libav context, decoder, frame queue, and inactivity timer.
-   * The finally path must release them even when reading or JPEG encoding fails.
-   */
-  private async runSession(): Promise<void> {
-    const context = this.options.runtime.createFormatContext();
-    this.activeContext = context;
-    let decoder: LibavDecoderLike | undefined;
-    let pending: QueuedFrame | undefined;
-    let activeEncode: Promise<void> | undefined;
-    let processingFailure: Error | undefined;
-    let inactivityTimer: NodeJS.Timeout | undefined;
-    let inactivityExpired = false;
-    const sessionController = new AbortController();
-    const stopSession = (): void => sessionController.abort(this.stopController.signal.reason);
-    this.stopController.signal.addEventListener('abort', stopSession, { once: true });
-    const sampler = new FrameSampler(this.framesPerSecond);
-
-    const armInactivityTimer = (): void => {
-      if (inactivityTimer !== undefined) clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(() => {
-        inactivityExpired = true;
-        sessionController.abort(
-          new AinNvrError(
-            'media_timeout',
-            `No decoded frame was received for ${this.mediaTimeoutMs} ms.`,
-          ),
-        );
-        void context.close().catch(() => undefined);
-      }, this.mediaTimeoutMs);
-      inactivityTimer.unref();
-    };
-
-    // At most one frame is encoding and one waits behind it; later frames are
-    // dropped so a slow callback cannot retain an unbounded native frame queue.
-    const startEncode = (item: QueuedFrame): void => {
-      activeEncode = (async () => {
-        try {
-          const jpeg = await this.options.runtime.toJpeg(item.frame, this.jpegQuality);
-          const frameNumber = this.frameNumber++;
-          await this.options.onFrame({
-            data: jpeg,
-            frameNumber,
-            captureTimeMs: item.captureTimeMs,
-            width: item.frame.width,
-            height: item.frame.height,
-            decoder: item.decoder,
-          });
-          this.emittedFrames += 1;
-        } finally {
-          item.frame.destroy();
-        }
-      })()
-        .catch((error: unknown) => {
-          processingFailure = error instanceof Error ? error : new Error(String(error));
-        })
-        .finally(() => {
-          activeEncode = undefined;
-          if (pending !== undefined) {
-            const next = pending;
-            pending = undefined;
-            if (processingFailure === undefined) startEncode(next);
-            else next.frame.destroy();
-          }
-        });
-    };
-
-    const offer = (item: QueuedFrame): void => {
-      if (activeEncode === undefined) {
-        startEncode(item);
-      } else if (pending === undefined) {
-        pending = item;
-      } else {
-        item.frame.destroy();
-        this.droppedFrames += 1;
-      }
-    };
-
-    const processFrame = (frame: LibavFrameLike, decoderName: string): void => {
-      if (!isSaneFrame(frame)) {
-        frame.destroy();
-        throw new Error('Decoder produced a frame with invalid dimensions.');
-      }
-      this.decodedFrames += 1;
-      armInactivityTimer();
-      if (!sampler.shouldCapture(this.monotonicNow())) {
-        frame.destroy();
-        return;
-      }
-      offer({ frame, captureTimeMs: this.now(), decoder: decoderName });
-    };
-
-    // Open, select a decoder that produced a valid first frame, then keep
-    // reading until cancellation, inactivity, or a processing failure.
-    try {
-      armInactivityTimer();
-      await context.open(this.options.url, { rtsp_transport: 'tcp' });
-      const stream = selectH264Stream(context);
-      const selection = await selectDecoder(
-        context,
-        stream,
-        this.options.runtime.keyPacketFlag,
-        decoderCandidates(this.capabilities),
-        sessionController.signal,
-      );
-      decoder = selection.decoder;
-      this.stateValue = 'extracting';
-      processFrame(selection.firstFrame, selection.candidate.label);
-
-      while (!sessionController.signal.aborted) {
-        if (processingFailure !== undefined) throw processingFailure;
-        const item = await context.receiveFrame([{ streamIndex: stream.index, decoder }]);
-        if (sessionController.signal.aborted) {
-          item?.destroy();
-          sessionController.signal.throwIfAborted();
-        }
-        if (processingFailure !== undefined) {
-          item?.destroy();
-          throw processingFailure;
-        }
-        if (item === null || item === undefined) continue;
-        if (item.type === 'packet') {
-          item.destroy();
-          continue;
-        }
-        processFrame(item, selection.candidate.label);
-      }
-    } catch (error) {
-      if (inactivityExpired) {
-        throw new AinNvrError(
-          'media_timeout',
-          `No decoded frame was received for ${this.mediaTimeoutMs} ms.`,
-          { cause: error },
-        );
-      }
-      throw error;
-    } finally {
-      if (inactivityTimer !== undefined) clearTimeout(inactivityTimer);
-      this.stopController.signal.removeEventListener('abort', stopSession);
-      pending?.frame.destroy();
-      pending = undefined;
-      await activeEncode?.catch(() => undefined);
-      decoder?.destroy();
-      await context.close().catch(() => undefined);
-      if (this.activeContext === context) this.activeContext = undefined;
     }
   }
 }
