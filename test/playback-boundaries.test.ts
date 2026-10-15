@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { createPlaybackStream } from '../src/playback/utils/create-playback-stream.util.js';
 import { type PlaybackMessage } from '../src/playback/types/playback-message.type.js';
+import { type PlaybackOptions } from '../src/playback/types/playback-options.interface.js';
 import { type PlaybackSegment } from '../src/playback/types/playback-segment.type.js';
 import { type PlaybackSource } from '../src/playback/types/playback-source.interface.js';
 import { createBaselineSps, createRtp, interleaved, videoTrack } from './helpers/media.js';
@@ -43,7 +44,10 @@ function segment(ref: number, data: Buffer, startTimeMs = 1_000): PlaybackSegmen
   };
 }
 
-async function collect(segments: readonly PlaybackSegment<number>[]): Promise<PlaybackMessage[]> {
+async function collect(
+  segments: readonly PlaybackSegment<number>[],
+  options: Pick<PlaybackOptions<number>, 'maximumBootstrapBytes'> = {},
+): Promise<PlaybackMessage[]> {
   const source: PlaybackSource<number> = {
     resolveStart: async () => ({ segment: segments[0]!, byteOffset: 0, actualStartTimeMs: 1_000 }),
     nextSegment: async (ref) => segments[ref + 1],
@@ -54,11 +58,35 @@ async function collect(segments: readonly PlaybackSegment<number>[]): Promise<Pl
     cameraId: 'camera',
     startTimeMs: 1_000,
     maximumGapMs: 500,
+    ...options,
   })) {
     messages.push(message);
   }
   return messages;
 }
+
+test('playback reports missing decoder configuration at the bootstrap byte limit', async () => {
+  const data = interleaved(0, createRtp(1, 90_000, Buffer.from([0x41, 1])));
+  const initial = segment(0, data);
+  const withoutParameterSets = {
+    ...initial,
+    tracks: initial.tracks.map((track) => {
+      if (track.mediaType !== 'video') return track;
+      const { parameterSets: _parameterSets, ...withoutParameterSets } = track;
+      return withoutParameterSets;
+    }),
+  };
+  await assert.rejects(collect([withoutParameterSets], { maximumBootstrapBytes: 1 }), {
+    code: 'no_decoder_configuration',
+  });
+});
+
+test('playback reports missing sync frame at the bootstrap byte limit', async () => {
+  const data = interleaved(0, createRtp(1, 90_000, Buffer.from([0x41, 1])));
+  await assert.rejects(collect([segment(0, data)], { maximumBootstrapBytes: 1 }), {
+    code: 'no_sync_frame',
+  });
+});
 
 for (const reason of ['incompatible-session', 'recording-gap'] as const) {
   function nextSegment(): PlaybackSegment<number> {

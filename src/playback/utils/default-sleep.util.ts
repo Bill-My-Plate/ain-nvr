@@ -6,15 +6,17 @@ export function defaultSleep(milliseconds: number, signal: AbortSignal): Promise
     return Promise.reject(signal.reason);
   }
   return new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(resolve, Math.max(0, milliseconds));
+    const timeout = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, Math.max(0, milliseconds));
     timeout.unref();
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timeout);
-        reject(signal.reason);
-      },
-      { once: true },
-    );
+    const onAbort = (): void => {
+      clearTimeout(timeout);
+      signal.removeEventListener('abort', onAbort);
+      reject(signal.reason);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
   });
 }

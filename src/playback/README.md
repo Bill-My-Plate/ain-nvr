@@ -4,7 +4,7 @@ Builds asynchronous playback from stored segments and paces media against record
 
 ## How it works
 
-The playback stream reads recorded packets, handles start position and segment boundaries, and produces media messages. PlaybackPacer controls timing, pauses, resumes, and waits for downstream acknowledgement. Independent track scheduling prevents one track from serially blocking the other.
+`createPlaybackStream` resolves the start position and traverses recording segments. Its private `PlaybackStreamProcessor` converts parsed packets into media messages, retains decoder and pending-audio state across continuous segments, and flushes the final access unit at a terminating boundary. PlaybackPacer controls timing, pauses, resumes, and waits for downstream acknowledgement. Independent track scheduling prevents one track from serially blocking the other.
 
 **Internal entry point:** [`index.ts`](index.ts). Cross-module imports use this entry point. Published package subpaths are defined by `src/exports/` and `package.json`.
 
