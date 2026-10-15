@@ -3,7 +3,7 @@ import { RecordingSegmentWriter } from '../../recording-storage/index.js';
 import type { PacketLocation } from '../../recording-storage/index.js';
 import type { RtspSessionSnapshot, RtspStreamSession } from '../../stream-session/index.js';
 import { GenerationSource } from './generation-source.class.js';
-import { asError } from '../utils/as-error.util.js';
+import { asError } from '../../shared/index.js';
 
 import type { RecorderOptions } from '../types/recorder-options.type.js';
 /**

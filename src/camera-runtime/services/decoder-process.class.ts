@@ -1,12 +1,12 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import type { ExtractedJpegFrame } from '../../frame-extractor/index.js';
 import { privateEntry } from '../utils/private-entry.util.js';
-import { asError } from '../utils/as-error.util.js';
+import { asError } from '../../shared/index.js';
 import { deadline } from '../utils/deadline.util.js';
 import { deferred } from '../utils/deferred.util.js';
 import { deserializeError } from '../utils/deserialize-error.util.js';
-import { failure } from '../utils/failure.util.js';
-import { type FrameProfile } from '../types/frame-profile.type.js';
+import { failure } from '../../camera/index.js';
+import { type FrameProfile } from '../../camera/index.js';
 import { type RuntimeSettings } from '../types/runtime-settings.type.js';
 import type { DecoderCommand } from '../types/decoder-command.type.js';
 import type { DecoderMessage } from '../types/decoder-message.type.js';

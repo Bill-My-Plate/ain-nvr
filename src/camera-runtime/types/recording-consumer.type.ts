@@ -1,5 +1,5 @@
-import { type RecordingConfiguration } from './recording-configuration.type.js';
-import type { RecordingOptions } from './recording-options.interface.js';
+import { type RecordingConfiguration } from '../../camera/index.js';
+import type { RecordingOptions } from '../../camera/index.js';
 
 import type { ConsumerBase } from './consumer-base.type.js';
 /**

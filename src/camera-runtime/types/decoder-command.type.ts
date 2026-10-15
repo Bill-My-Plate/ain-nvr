@@ -1,4 +1,4 @@
-import type { FrameProfile } from './frame-profile.type.js';
+import type { FrameProfile } from '../../camera/index.js';
 /**
  * Command sent from the camera worker to its decoder process.
  */

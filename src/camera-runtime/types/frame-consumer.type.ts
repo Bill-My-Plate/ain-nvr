@@ -1,6 +1,6 @@
 import { deferred } from '../utils/deferred.util.js';
-import { type FrameProfile } from './frame-profile.type.js';
-import type { FrameOptions } from './frame-options.interface.js';
+import { type FrameProfile } from '../../camera/index.js';
+import type { FrameOptions } from '../../camera/index.js';
 
 import type { ConsumerBase } from './consumer-base.type.js';
 /**

@@ -1,5 +1,5 @@
-import type { RecordingConfiguration } from './recording-configuration.type.js';
-import type { FrameProfile } from './frame-profile.type.js';
+import type { RecordingConfiguration } from '../../camera/index.js';
+import type { FrameProfile } from '../../camera/index.js';
 /**
  * Worker command requesting recording, frames, a boundary, stop, or close.
  */

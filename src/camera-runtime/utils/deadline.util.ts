@@ -1,4 +1,4 @@
-import { failure } from './failure.util.js';
+import { failure } from '../../camera/index.js';
 /**
  * Bounds an asynchronous operation by a timeout and abort signal.
  */

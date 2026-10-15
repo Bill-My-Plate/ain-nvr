@@ -1,9 +1,9 @@
 import { CameraOwner } from './camera-owner.class.js';
 import { StartupLimiter } from './startup-limiter.class.js';
-import { cameraIdentity } from '../utils/camera-identity.util.js';
-import { failure } from '../utils/failure.util.js';
+import { cameraIdentity } from '../../camera/index.js';
+import { failure } from '../../camera/index.js';
 import { type RuntimeSettings } from '../types/runtime-settings.type.js';
-import type { CameraLease } from '../types/camera-lease.interface.js';
+import type { CameraLease } from '../../camera/index.js';
 import type { CameraRuntime } from '../types/camera-runtime.interface.js';
 
 import { abortable } from '../utils/abortable.util.js';

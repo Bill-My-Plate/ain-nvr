@@ -1,12 +1,7 @@
-/** Named protocol fields, time units, and operational limits for camera-runtime. */
+/** Worker protocol limits, time units, and operational thresholds. */
 export const CAMERA_RUNTIME_CONSTANTS = {
   statusPublishIntervalMs: 1_000,
   nanosecondsPerMillisecond: 1_000_000,
-  maxQueuedMediaBytes: 8 * 1024 * 1024,
-  pauseQueuedMediaBytes: 4 * 1024 * 1024,
-  maxQueuedMediaPackets: 4_096,
-  defaultSegmentDurationMs: 2_000,
-  defaultMinimumFreeBytes: 512 * 1024 * 1024,
   rtspUnauthorizedStatus: 401,
   rtspForbiddenStatus: 403,
   rtspUnsupportedTransportStatus: 461,
@@ -16,8 +11,5 @@ export const CAMERA_RUNTIME_CONSTANTS = {
   maximumPendingCameraCommands: 64,
   maximumDecoderErrors: 3,
   eventLoopResolutionMs: 20,
-  defaultFramesPerSecond: 4,
-  defaultJpegQuality: 0.9,
-  maximumFramesPerSecond: 60,
   maximumErrorCauseDepth: 8,
 } as const;

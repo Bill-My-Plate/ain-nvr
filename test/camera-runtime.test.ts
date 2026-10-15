@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 import { getCameraRuntime } from '../src/camera-runtime/utils/get-camera-runtime.util.js';
+import { frameProfile } from '../src/camera/index.js';
+import { recordingConfiguration } from '../src/camera/index.js';
 import type { CommittedSegment } from '../src/recording-storage/index.js';
 import { CameraServer, until } from './helpers/camera-server.js';
 
@@ -37,6 +39,8 @@ test('managed recording and native JPEG subscribers share one upstream and indep
     }, onError: error => errors.push(error) });
     await frames.ready;
     await until(() => delivered >= 3 && committed.length > 0);
+    await until(() => recordLease.status.decoder === 'ready' && recordLease.status.framesDelivered >= 3);
+    assert.equal(recordLease.status.recording, true);
     assert.equal(server.maximumClients, 1);
     assert.equal(server.bridge.status.clientCount, 1);
     const metadata = JSON.parse(await readFile(committed[0]!.metadataPath, 'utf8'));
@@ -59,6 +63,8 @@ test('managed recording and native JPEG subscribers share one upstream and indep
     const before = committed.length;
     await frames.stop();
     await frameLease.release();
+    await until(() => recordLease.status.decoder === 'idle');
+    assert.equal(recordLease.status.recording, true);
     const stoppedFrames = delivered;
     await until(() => committed.length > before);
     assert.equal(delivered, stoppedFrames);
@@ -66,10 +72,47 @@ test('managed recording and native JPEG subscribers share one upstream and indep
     await recording.stop();
     await recordLease.release();
     await until(() => server.bridge.status.clientCount === 0);
+    assert.equal(recordLease.status.state, 'closed');
+    assert.ok(committed.length > 0);
+    assert.throws(() => recordLease.startFrames({
+      onFrame: () => undefined, onError: () => undefined,
+    }), /released/);
     assert.deepEqual(errors, []);
   } finally {
     await runtime.close().finally(async () => { await server.close(); await rm(root, { recursive: true, force: true }); });
   }
+});
+
+test('camera option validation keeps defaults, bounds, and coded errors', () => {
+  const onFrame = () => undefined;
+  const onError = () => undefined;
+  assert.deepEqual(frameProfile({ onFrame, onError }), {
+    framesPerSecond: 4,
+    jpegQuality: 0.9,
+  });
+  assert.throws(
+    () => frameProfile({ framesPerSecond: 0, onFrame, onError }),
+    (error: unknown) => (error as NodeJS.ErrnoException).code === 'EINVAL',
+  );
+  assert.throws(
+    () => frameProfile({ jpegQuality: 2, onFrame, onError }),
+    (error: unknown) => (error as NodeJS.ErrnoException).code === 'EINVAL',
+  );
+  const options = {
+    cacheRoot: '/tmp/ain-nvr-recording-validation', segmentDurationMs: 600,
+    onCommitted: () => undefined, onError,
+  };
+  assert.deepEqual(recordingConfiguration(options), {
+    cacheRoot: options.cacheRoot, segmentDurationMs: options.segmentDurationMs,
+  });
+  assert.throws(
+    () => recordingConfiguration({ ...options, segmentDurationMs: 0 }),
+    (error: unknown) => (error as NodeJS.ErrnoException).code === 'EINVAL',
+  );
+  assert.throws(
+    () => recordingConfiguration({ ...options, cacheRoot: 'relative' }),
+    (error: unknown) => (error as NodeJS.ErrnoException).code === 'EINVAL',
+  );
 });
 
 test('ESM/CommonJS registry identity and configuration checks', async () => {

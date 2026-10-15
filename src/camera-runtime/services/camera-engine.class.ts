@@ -1,84 +1,52 @@
-import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-values.constant.js';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import type { MessagePort } from 'node:worker_threads';
+import { type CameraStatus } from '../../camera/index.js';
 import { RtspStreamSession } from '../../stream-session/index.js';
-import { RtspLoopbackBridge } from '../../stream-adapters/index.js';
-import type { ExtractedJpegFrame } from '../../frame-extractor/index.js';
-import { CameraRecorder } from './camera-recorder.class.js';
-import { DecoderProcess } from './decoder-process.class.js';
-import { asError } from '../utils/as-error.util.js';
-import { failure } from '../utils/failure.util.js';
+import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-values.constant.js';
+import { CameraFrameController } from './camera-frame-controller.class.js';
+import { CameraRecordingController } from './camera-recording-controller.class.js';
 import { serializeError } from '../utils/serialize-error.util.js';
 import { terminalCameraError } from '../utils/terminal-camera-error.util.js';
-import { type Command } from '../types/command.type.js';
-import { type FrameAck } from '../types/frame-ack.type.js';
-import { type FrameMessage } from '../types/frame-message.type.js';
-import { type FrameProfile } from '../types/frame-profile.type.js';
-import { type RecordingEvent } from '../types/recording-event.type.js';
-import { type RuntimeSettings } from '../types/runtime-settings.type.js';
-import { type WorkerMessage } from '../types/worker-message.type.js';
-import type { CameraStatus } from '../types/camera-status.interface.js';
-/**
- * Owns one worker-side camera session, recording source, decoder process, and frame delivery state.
- */
+import type { Command } from '../types/command.type.js';
+import type { RuntimeSettings } from '../types/runtime-settings.type.js';
+import type { WorkerMessage } from '../types/worker-message.type.js';
+
+/** Coordinates one worker-side RTSP session, its consumers, and camera status. */
 export class CameraEngine {
   private readonly session: RtspStreamSession;
   private readonly abort = new AbortController();
   private readonly loopDelay = monitorEventLoopDelay({
     resolution: CAMERA_RUNTIME_CONSTANTS.eventLoopResolutionMs,
   });
-  private readonly frames = new Map<
-    string,
-    {
-      /** Sequence number used to match a frame with its acknowledgement. */
-      sequence: number;
-      /** Whether the frame has not yet been acknowledged. */
-      awaiting: boolean;
-    }
-  >();
-  private readonly events = new Set<number>();
+  private readonly recording: CameraRecordingController;
+  private readonly frames: CameraFrameController;
   private readonly timer: NodeJS.Timeout;
   private readonly unsubscribe: () => void;
-  private recorder:
-    | {
-        /** Identifier of the consumer or operation. */
-        id: string;
-        /** Stored resource or pending value. */
-        value: CameraRecorder;
-      }
-    | undefined;
-  private decoder: DecoderProcess | undefined;
-  private bridge: RtspLoopbackBridge | undefined;
-  private profile: FrameProfile | undefined;
-  private frameTransition: Promise<void> = Promise.resolve();
   private generation = 0;
   private state: CameraStatus['state'] = 'starting';
-  private decoderState: CameraStatus['decoder'] = 'idle';
-  private reconciliationNeeded = false;
   private statusPending = false;
-  private progressPending = false;
-  private delivered = 0;
-  private dropped = 0;
-  private sequence = 0;
   private closing: Promise<void> | undefined;
-  private failedFrames = false;
-  private firstFrameTimer: NodeJS.Timeout | undefined;
-  /**
-   * Creates the instance and initializes its state.
-   */
+
+  /** Wires the camera session to its recording and frame controllers. */
   public constructor(
     private readonly cameraId: string,
     url: string,
     private readonly epoch: number,
     private readonly settings: RuntimeSettings,
-    private readonly framePort: MessagePort,
+    framePort: MessagePort,
     private readonly send: (message: WorkerMessage) => void,
   ) {
     this.session = new RtspStreamSession({ url });
+    this.recording = new CameraRecordingController(
+      this.session, cameraId, epoch, settings, send, () => this.publishStatus(),
+    );
+    this.frames = new CameraFrameController(
+      this.session, cameraId, epoch, settings, framePort, this.abort.signal,
+      () => this.generation, send, () => this.publishStatus(),
+    );
     this.unsubscribe = this.session.subscribeSessionChanges((snapshot) => {
       this.generation = snapshot.generation;
-      // Outstanding old-generation JPEGs remain charged until acknowledged.
-      if (this.frames.size > 0) this.scheduleFrames();
+      this.frames.onGeneration();
       this.publishStatus();
     });
     this.session.on('state', (state) => {
@@ -97,289 +65,83 @@ export class CameraEngine {
         void this.close().catch(() => undefined);
       }
     });
-    framePort.on('message', (ack: FrameAck) => {
-      if (ack.epoch !== this.epoch) return;
-      const frame = this.frames.get(ack.consumerId);
-      if (frame?.sequence === ack.sequence) frame.awaiting = false;
-    });
-    framePort.start();
     this.loopDelay.enable();
     this.timer = setInterval(() => {
-      if (this.progressPending && this.recorder !== undefined && !this.statusPending) {
-        this.send({ kind: 'progress', epoch, consumerId: this.recorder.id });
-        this.progressPending = false;
-      }
+      this.recording.publishProgress(this.statusPending);
       this.publishStatus();
     }, CAMERA_RUNTIME_CONSTANTS.statusPublishIntervalMs);
     this.timer.unref();
   }
 
-  /**
-   * Starts the operation and initializes its resources.
-   */
+  /** Starts RTSP negotiation within the configured acquire deadline. */
   public async start(): Promise<void> {
     await this.session.start(
       AbortSignal.any([this.abort.signal, AbortSignal.timeout(this.settings.acquireTimeoutMs)]),
     );
   }
-  /**
-   * Returns the current RTSP stream generation.
-   */
+
+  /** Current RTSP generation used to reject stale decoder output. */
   public get streamGeneration(): number {
     return this.generation;
   }
-  /**
-   * Acknowledge Event.
-   */
+
+  /** Releases a recording event slot after the host acknowledges it. */
   public acknowledgeEvent(sequence: number, failed: boolean): void {
-    this.events.delete(sequence);
-    if (failed) this.reconciliationNeeded = true;
+    this.recording.acknowledgeEvent(sequence, failed);
   }
-  /**
-   * Acknowledge Status.
-   */
+
+  /** Allows the next status snapshot after the host acknowledges this one. */
   public acknowledgeStatus(): void {
     this.statusPending = false;
   }
 
-  /**
-   * Applies one worker command to the live camera resources.
-   * Recording owns one pipeline, while frame subscribers share one decoder
-   * profile; failed startup removes the new owner before reporting the error.
-   */
+  /** Routes a worker command to the recording or frame owner. */
   public async execute(command: Command): Promise<void> {
     if (command.type === 'close') return this.close();
     this.abort.signal.throwIfAborted();
     if (command.type === 'record') {
-      if (this.recorder !== undefined)
-        throw failure('EEXIST', 'Camera already has a recording owner.');
-      const recorder = new CameraRecorder(this.session, {
-        ...command.options,
-        cameraId: this.cameraId,
-        onCommitted: (segment) =>
-          this.recordingEvent(command.consumerId, { type: 'committed', segment }),
-        onSessionClosed: (cameraId, sessionStartMs) =>
-          this.recordingEvent(command.consumerId, {
-            type: 'session-closed',
-            cameraId,
-            sessionStartMs,
-          }),
-        onError: (error) => {
-          this.reconciliationNeeded = true;
-          this.send({
-            kind: 'consumer-error',
-            epoch: this.epoch,
-            consumerId: command.consumerId,
-            error: serializeError(error),
-          });
-        },
-        onProgress: () => {
-          this.progressPending = true;
-        },
-      });
-      this.recorder = { id: command.consumerId, value: recorder };
-      try {
-        await recorder.start();
-      } catch (error) {
-        await recorder.stop().catch(() => undefined);
-        this.recorder = undefined;
-        throw error;
-      }
+      await this.recording.start(command.consumerId, command.options);
     } else if (command.type === 'frames') {
-      if (this.frames.size >= this.settings.maxFrameSubscribers)
-        throw failure('ENOSPC', 'Frame subscriber limit reached.');
-      if (
-        this.profile !== undefined &&
-        JSON.stringify(this.profile) !== JSON.stringify(command.profile)
-      ) {
-        throw failure('EINVAL', 'Camera frame subscribers must use the same FPS and JPEG quality.');
-      }
-      this.profile = command.profile;
-      this.frames.set(command.consumerId, { sequence: 0, awaiting: false });
-      if (this.decoder === undefined) this.scheduleFrames();
-      await this.frameTransition;
-      if (!this.frames.has(command.consumerId))
-        throw failure('decoder_unavailable', 'Camera decoder could not start.');
+      await this.frames.start(command.consumerId, command.profile);
     } else if (command.type === 'boundary') {
-      if (this.recorder?.id !== command.consumerId)
-        throw failure('ENOENT', 'Recording is no longer active.');
-      this.recorder.value.requestBoundary();
+      this.recording.boundary(command.consumerId);
     } else if (command.type === 'stop') {
-      if (this.recorder?.id === command.consumerId) {
-        const recorder = this.recorder;
-        try {
-          await recorder.value.stop();
-        } finally {
-          this.recorder = undefined;
-        }
-      }
-      if (this.frames.delete(command.consumerId) && this.frames.size === 0) {
-        await this.frameTransition;
-        await this.stopDecoder();
-        this.profile = undefined;
-      }
+      await this.recording.stop(command.consumerId);
+      await this.frames.stop(command.consumerId);
     }
     this.publishStatus();
   }
 
-  /**
-   * Stops active work and releases owned resources.
-   */
+  /** Stops consumers, then the session, and finally the frame message port. */
   public close(): Promise<void> {
     if (this.closing !== undefined) return this.closing;
     this.abort.abort(new Error('Camera engine is closing.'));
     this.state = 'closing';
     this.unsubscribe();
-    this.frames.clear();
+    this.frames.beginClose();
     clearInterval(this.timer);
     this.loopDelay.disable();
     this.closing = (async () => {
       const results = await Promise.allSettled([
-        this.recorder?.value.stop(),
-        this.frameTransition.then(() => this.stopDecoder()),
+        this.recording.close(),
+        this.frames.closeDecoder(),
       ]);
       await this.session.stop();
-      this.recorder = undefined;
+      this.recording.finishClose();
       this.state = 'closed';
       this.publishStatus();
-      this.framePort.close();
-      const errors = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      this.frames.closePort();
+      const errors = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
       if (errors.length)
         throw new AggregateError(
-          errors.map((r) => r.reason),
+          errors.map((result) => result.reason),
           'Camera shutdown could not finalize all consumers.',
         );
     })();
     return this.closing;
   }
 
-  /**
-   * Schedule Frames.
-   */
-  private scheduleFrames(): void {
-    const generation = this.generation;
-    this.failedFrames = false;
-    this.decoderState = 'starting';
-    this.frameTransition = this.frameTransition
-      .then(async () => {
-        await this.stopDecoder();
-        if (this.frames.size === 0 || this.abort.signal.aborted || generation !== this.generation)
-          return;
-        this.failedFrames = false;
-        const bridge = new RtspLoopbackBridge({ source: this.session });
-        this.bridge = bridge;
-        const url = await bridge.start();
-        const decoder = new DecoderProcess(
-          this.settings,
-          (frame) => {
-            if (generation === this.generation) this.deliver(frame, generation);
-          },
-          (error) => this.failFrames(error),
-        );
-        this.decoder = decoder;
-        this.decoderState = 'starting';
-        this.firstFrameTimer = setTimeout(
-          () =>
-            this.failFrames(failure('ETIMEDOUT', 'Decoder produced no JPEG before its deadline.')),
-          this.settings.firstFrameTimeoutMs,
-        );
-        await decoder.start(url, this.cameraId, this.profile!);
-      })
-      .catch((error) => this.failFrames(asError(error)));
-  }
-
-  /**
-   * Stop Decoder.
-   */
-  private async stopDecoder(): Promise<void> {
-    clearTimeout(this.firstFrameTimer);
-    const decoder = this.decoder;
-    const bridge = this.bridge;
-    this.decoder = undefined;
-    this.bridge = undefined;
-    try {
-      await decoder?.stop();
-    } finally {
-      await bridge?.stop();
-    }
-    this.decoderState = 'idle';
-  }
-  /**
-   * Fail Frames.
-   */
-  private failFrames(error: Error): void {
-    if (this.failedFrames || this.abort.signal.aborted) return;
-    this.failedFrames = true;
-    this.decoderState = 'failed';
-    for (const consumerId of this.frames.keys()) {
-      this.send({
-        kind: 'consumer-error',
-        epoch: this.epoch,
-        consumerId,
-        error: serializeError(error),
-      });
-    }
-    this.frames.clear();
-    this.profile = undefined;
-    // Schedule outside the failed transition to avoid waiting on ourselves.
-    this.frameTransition = this.frameTransition
-      .then(() => this.stopDecoder())
-      .catch((error) => {
-        this.send({
-          kind: 'fatal',
-          epoch: this.epoch,
-          terminal: false,
-          error: serializeError(error),
-        });
-      });
-    this.publishStatus();
-  }
-  /**
-   * Deliver.
-   */
-  private deliver(frame: ExtractedJpegFrame, generation: number): void {
-    if (this.abort.signal.aborted) return;
-    clearTimeout(this.firstFrameTimer);
-    this.decoderState = 'ready';
-    for (const [consumerId, slot] of this.frames) {
-      if (
-        slot.awaiting ||
-        frame.data.length > this.settings.maximumFrameBytes ||
-        Date.now() - frame.captureTimeMs > this.settings.maximumFrameAgeMs
-      ) {
-        this.dropped++;
-        continue;
-      }
-      slot.awaiting = true;
-      slot.sequence++;
-      const message: FrameMessage = {
-        kind: 'frame',
-        epoch: this.epoch,
-        generation,
-        consumerId,
-        sequence: slot.sequence,
-        frame: { ...frame, data: Buffer.from(frame.data) },
-      };
-      this.framePort.postMessage(message);
-      this.delivered++;
-    }
-  }
-  /**
-   * Recording Event.
-   */
-  private recordingEvent(consumerId: string, event: RecordingEvent): void {
-    if (this.events.size >= this.settings.maximumPendingEvents) {
-      this.reconciliationNeeded = true;
-      this.publishStatus();
-      return;
-    }
-    const sequence = ++this.sequence;
-    this.events.add(sequence);
-    this.send({ kind: 'event', epoch: this.epoch, sequence, consumerId, event });
-  }
-  /**
-   * Publish Status.
-   */
+  /** Publishes one bounded status snapshot until the host acknowledges it. */
   private publishStatus(): void {
     if (this.statusPending) return;
     this.statusPending = true;
@@ -393,13 +155,13 @@ export class CameraEngine {
         state: this.state,
         workerEpoch: this.epoch,
         streamGeneration: this.generation,
-        recording: this.recorder !== undefined,
-        decoder: this.decoderState,
-        framesDelivered: this.delivered,
-        framesDropped: this.dropped,
-        recordingQueuedBytes: this.recorder?.value.queuedBytes ?? 0,
+        recording: this.recording.active,
+        decoder: this.frames.decoderState,
+        framesDelivered: this.frames.framesDelivered,
+        framesDropped: this.frames.framesDropped,
+        recordingQueuedBytes: this.recording.queuedBytes,
         workerEventLoopDelayMs: Number.isFinite(delay) ? delay : 0,
-        reconciliationNeeded: this.reconciliationNeeded,
+        reconciliationNeeded: this.recording.reconciliationNeeded,
       },
     });
   }

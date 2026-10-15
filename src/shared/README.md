@@ -1,6 +1,6 @@
 # shared
 
-Contains the small error contract shared across modules. It has no runtime service or domain-specific utility.
+Contains the common error contract and `asError`, which normalizes unknown thrown values for camera and runtime code. It has no domain-specific service.
 
 ## How it works
 
@@ -12,6 +12,7 @@ AinNvrError carries a typed error code and optional cause. Domain errors may ext
 
 - **`AinNvrError`** (value): Base error with an ain-nvr code and optional cause.
 - **`AinNvrErrorCode`** (type): Allowed base error codes.
+- **`asError`** (value): Converts an unknown thrown value to an `Error`.
 
 ## Files and review
 

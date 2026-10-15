@@ -1,0 +1,14 @@
+export type { CommittedSegment } from '../recording-storage/index.js';
+export type { CameraLease } from './types/camera-lease.interface.js';
+export type { CameraStatus } from './types/camera-status.interface.js';
+export type { FrameHandle } from './types/frame-handle.interface.js';
+export type { FrameOptions } from './types/frame-options.interface.js';
+export type { FrameProfile } from './types/frame-profile.type.js';
+export type { RecordingConfiguration } from './types/recording-configuration.type.js';
+export type { RecordingHandle } from './types/recording-handle.interface.js';
+export type { RecordingOptions } from './types/recording-options.interface.js';
+export { CameraRecorder } from './services/camera-recorder.class.js';
+export { cameraIdentity } from './utils/camera-identity.util.js';
+export { failure } from './utils/failure.util.js';
+export { frameProfile } from './utils/frame-profile.util.js';
+export { recordingConfiguration } from './utils/recording-configuration.util.js';

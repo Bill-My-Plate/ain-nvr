@@ -1,4 +1,4 @@
-import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-values.constant.js';
+import { CAMERA_CONSTANTS } from '../constants/camera-numeric-values.constant.js';
 import type { FrameOptions } from '../types/frame-options.interface.js';
 import { failure } from './failure.util.js';
 import { type FrameProfile } from '../types/frame-profile.type.js';
@@ -7,12 +7,12 @@ import { type FrameProfile } from '../types/frame-profile.type.js';
  */
 export function frameProfile(options: FrameOptions): FrameProfile {
   const framesPerSecond =
-    options.framesPerSecond ?? CAMERA_RUNTIME_CONSTANTS.defaultFramesPerSecond;
-  const jpegQuality = options.jpegQuality ?? CAMERA_RUNTIME_CONSTANTS.defaultJpegQuality;
+    options.framesPerSecond ?? CAMERA_CONSTANTS.defaultFramesPerSecond;
+  const jpegQuality = options.jpegQuality ?? CAMERA_CONSTANTS.defaultJpegQuality;
   if (
     !Number.isFinite(framesPerSecond) ||
     framesPerSecond <= 0 ||
-    framesPerSecond > CAMERA_RUNTIME_CONSTANTS.maximumFramesPerSecond
+    framesPerSecond > CAMERA_CONSTANTS.maximumFramesPerSecond
   )
     throw failure('EINVAL', 'framesPerSecond must be in (0, 60].');
   if (!Number.isFinite(jpegQuality) || jpegQuality <= 0 || jpegQuality > 1)

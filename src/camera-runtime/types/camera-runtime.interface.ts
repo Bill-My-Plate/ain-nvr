@@ -1,4 +1,4 @@
-import type { CameraLease } from './camera-lease.interface.js';
+import type { CameraLease } from '../../camera/index.js';
 /**
  * Contract for acquiring camera leases and shutting down the registry.
  */

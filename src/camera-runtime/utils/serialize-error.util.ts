@@ -1,6 +1,6 @@
 import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-values.constant.js';
 import type { WireError } from '../types/wire-error.type.js';
-import { asError } from './as-error.util.js';
+import { asError } from '../../shared/index.js';
 /**
  * Converts an Error and nested causes to bounded worker-safe data.
  */

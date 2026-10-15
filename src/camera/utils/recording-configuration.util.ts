@@ -1,4 +1,4 @@
-import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-values.constant.js';
+import { CAMERA_CONSTANTS } from '../constants/camera-numeric-values.constant.js';
 import { isAbsolute } from 'node:path';
 import type { RecordingOptions } from '../types/recording-options.interface.js';
 import { failure } from './failure.util.js';
@@ -10,8 +10,8 @@ export function recordingConfiguration(options: RecordingOptions): RecordingConf
   for (const [name, value] of Object.entries({
     segmentDurationMs: options.segmentDurationMs,
     playpointIntervalMs:
-      options.playpointIntervalMs ?? CAMERA_RUNTIME_CONSTANTS.defaultSegmentDurationMs,
-    minimumFreeBytes: options.minimumFreeBytes ?? CAMERA_RUNTIME_CONSTANTS.defaultMinimumFreeBytes,
+      options.playpointIntervalMs ?? CAMERA_CONSTANTS.defaultSegmentDurationMs,
+    minimumFreeBytes: options.minimumFreeBytes ?? CAMERA_CONSTANTS.defaultMinimumFreeBytes,
   })) {
     if (!Number.isSafeInteger(value) || value <= 0)
       throw failure('EINVAL', `${name} must be a positive safe integer.`);

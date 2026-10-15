@@ -8,7 +8,7 @@ const modules = new Set([
   'shared', 'rtsp-parser', 'rtp-parser', 'h264', 'media', 'rtsp-client',
   'stream-session', 'recorded-stream-parser', 'recording-parser', 'playback',
   'recording-storage', 'stream-adapters', 'frame-extractor',
-  'camera-runtime',
+  'camera', 'camera-runtime',
 ]);
 const allowedModuleEdges = new Map(Object.entries({
   shared: [],
@@ -24,7 +24,8 @@ const allowedModuleEdges = new Map(Object.entries({
   'recording-storage': ['h264', 'recording-parser', 'stream-session'],
   'stream-adapters': ['h264', 'media', 'playback', 'rtsp-parser', 'shared', 'stream-session'],
   'frame-extractor': ['shared', 'stream-adapters'],
-  'camera-runtime': ['frame-extractor', 'recording-parser', 'recording-storage', 'stream-adapters', 'stream-session'],
+  camera: ['frame-extractor', 'recording-parser', 'recording-storage', 'shared', 'stream-session'],
+  'camera-runtime': ['camera', 'frame-extractor', 'recording-storage', 'shared', 'stream-adapters', 'stream-session'],
 }).map(([name, targets]) => [name, new Set(targets)]));
 const files = [];
 function visit(directory) {

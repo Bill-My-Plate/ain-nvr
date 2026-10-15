@@ -11,6 +11,7 @@ execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconf
 const directory = new URL('../.test-dist/test/', import.meta.url);
 const tests = (await readdir(directory)).filter(name => name.endsWith('.test.js')).sort()
   .map(name => fileURLToPath(new URL(name, directory)));
-const result = spawnSync(process.execPath, ['--test', ...process.argv.slice(2), ...tests], { cwd: root, stdio: 'inherit' });
+// Native decoder integration files contend for the same host resources when run in parallel.
+const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...process.argv.slice(2), ...tests], { cwd: root, stdio: 'inherit' });
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;

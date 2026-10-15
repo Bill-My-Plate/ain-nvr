@@ -1,6 +1,6 @@
 import { resolveSettings } from './resolve-settings.util.js';
 
-import { failure } from './failure.util.js';
+import { failure } from '../../camera/index.js';
 import { type RuntimeSettings } from '../types/runtime-settings.type.js';
 import type { CameraRuntime } from '../types/camera-runtime.interface.js';
 import type { CameraRuntimeOptions } from '../types/camera-runtime-options.interface.js';

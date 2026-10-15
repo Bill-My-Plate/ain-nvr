@@ -1,4 +1,4 @@
-import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-values.constant.js';
+import { CAMERA_CONSTANTS } from '../constants/camera-numeric-values.constant.js';
 import type { RecordingPacketSource } from '../../recording-parser/index.js';
 import type { MediaPacket, RtspStreamSession } from '../../stream-session/index.js';
 /** Subscribed synchronously at negotiation, before async writer setup or queued PLAY packets. */
@@ -29,15 +29,15 @@ export class GenerationSource implements RecordingPacketSource {
       else {
         this.bytes += packet.rawInterleavedFrame.length;
         if (
-          this.bytes > CAMERA_RUNTIME_CONSTANTS.maxQueuedMediaBytes ||
-          this.queue.length >= CAMERA_RUNTIME_CONSTANTS.maxQueuedMediaPackets
+          this.bytes > CAMERA_CONSTANTS.maxQueuedMediaBytes ||
+          this.queue.length >= CAMERA_CONSTANTS.maxQueuedMediaPackets
         ) {
           this.close();
           onError(new Error('Recording generation startup buffer exceeded its limit.'));
           return;
         }
         this.queue.push(packet);
-        if (this.bytes >= CAMERA_RUNTIME_CONSTANTS.pauseQueuedMediaBytes) this.pauseMedia();
+        if (this.bytes >= CAMERA_CONSTANTS.pauseQueuedMediaBytes) this.pauseMedia();
       }
     });
   }

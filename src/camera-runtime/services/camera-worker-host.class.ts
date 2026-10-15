@@ -2,11 +2,11 @@ import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-va
 import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads';
 import { privateEntry } from '../utils/private-entry.util.js';
 import { PROTOCOL_VERSION } from '../constants/protocol-version.constant.js';
-import { asError } from '../utils/as-error.util.js';
+import { asError } from '../../shared/index.js';
 import { deadline } from '../utils/deadline.util.js';
 import { deferred } from '../utils/deferred.util.js';
 import { deserializeError } from '../utils/deserialize-error.util.js';
-import { failure } from '../utils/failure.util.js';
+import { failure } from '../../camera/index.js';
 import { type Command } from '../types/command.type.js';
 import { type FrameAck } from '../types/frame-ack.type.js';
 import { type FrameMessage } from '../types/frame-message.type.js';

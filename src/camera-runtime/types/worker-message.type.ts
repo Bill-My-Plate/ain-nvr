@@ -1,4 +1,4 @@
-import type { CameraStatus } from './camera-status.interface.js';
+import type { CameraStatus } from '../../camera/index.js';
 
 import type { WireError } from './wire-error.type.js';
 import type { RecordingEvent } from './recording-event.type.js';

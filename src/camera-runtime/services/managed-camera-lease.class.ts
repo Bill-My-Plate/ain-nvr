@@ -1,11 +1,11 @@
 import { CameraOwner } from './camera-owner.class.js';
 
-import { failure } from '../utils/failure.util.js';
-import type { CameraLease } from '../types/camera-lease.interface.js';
-import type { FrameHandle } from '../types/frame-handle.interface.js';
-import type { FrameOptions } from '../types/frame-options.interface.js';
-import type { RecordingHandle } from '../types/recording-handle.interface.js';
-import type { RecordingOptions } from '../types/recording-options.interface.js';
+import { failure } from '../../camera/index.js';
+import type { CameraLease } from '../../camera/index.js';
+import type { FrameHandle } from '../../camera/index.js';
+import type { FrameOptions } from '../../camera/index.js';
+import type { RecordingHandle } from '../../camera/index.js';
+import type { RecordingOptions } from '../../camera/index.js';
 /**
  * Provides a per-caller handle to a shared camera owner and releases its consumers on close.
  */

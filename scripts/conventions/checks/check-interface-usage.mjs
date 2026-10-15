@@ -74,20 +74,28 @@ export function checkInterfaceUsage(program, sourceRoot, legacyPublicInterfaces)
     return `${symbol.file}:${symbol.name}`;
   }
 
-  const publicInterfaces = new Set();
-  const publicInterfaceKeys = new Set();
+  const publicSymbols = new Map();
   const facadeFiles = [path.join(sourceRoot, 'index.ts')];
   for (const entry of readdirSync(path.join(sourceRoot, 'exports'))) {
     if (entry.endsWith('.ts')) facadeFiles.push(path.join(sourceRoot, 'exports', entry));
   }
   for (const facade of facadeFiles) {
     for (const symbol of exportedSymbols(facade).values()) {
-      if (ast.isInterfaceDeclaration(symbol.node)) {
-        publicInterfaces.add(interfaceId(symbol));
-        publicInterfaceKeys.add(interfaceKey(symbol));
-      }
+      if (!ast.isInterfaceDeclaration(symbol.node)) continue;
+      const key = interfaceKey(symbol);
+      const facadeId = `${path.basename(facade, '.ts')}:${symbol.name}`;
+      const legacyId = legacyPublicInterfaces.has(facadeId)
+        ? facadeId
+        : publicSymbols.get(key)?.legacyId;
+      publicSymbols.set(key, { symbol, legacyId });
     }
   }
+  const publicInterfaceKeys = new Set(publicSymbols.keys());
+  const publicInterfaces = new Set([...publicSymbols.values()].map(
+    ({ symbol, legacyId }) => legacyId ?? interfaceId(symbol)));
+  const legacyPublicKeys = new Set([...publicSymbols]
+    .filter(([, value]) => legacyPublicInterfaces.has(value.legacyId ?? interfaceId(value.symbol)))
+    .map(([key]) => key));
 
   const implementedInterfaces = new Set();
   for (const file of sources) {
@@ -130,10 +138,9 @@ export function checkInterfaceUsage(program, sourceRoot, legacyPublicInterfaces)
     const source = program.getSourceFile(file);
     for (const node of source.statements) {
       if (!ast.isInterfaceDeclaration(node)) continue;
-      const id = interfaceId({ file, name: node.name.text });
       const key = interfaceKey({ file, name: node.name.text });
       if (implementedInterfaces.has(key)) continue;
-      if (legacyPublicInterfaces.has(id) && publicInterfaceKeys.has(key)) continue;
+      if (legacyPublicKeys.has(key) && publicInterfaceKeys.has(key)) continue;
       const location = source.getLineAndCharacterOfPosition(node.getStart(source));
       violations.push(`${path.relative(sourceRoot, file)}:${location.line + 1}: ` +
         `Interface ${node.name.text} is not implemented by a class; use type`);
