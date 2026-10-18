@@ -30,8 +30,10 @@ test('managed recording and native JPEG subscribers share one upstream and indep
     await assert.rejects(frameLease.startRecording({ cacheRoot: root, segmentDurationMs: 600,
       onCommitted: () => undefined, onError: () => undefined }), /recording owner/);
     let delivered = 0;
+    let retainedFrame: Buffer | undefined;
     const frames = await frameLease.startFrames({ framesPerSecond: 4, onFrame: frame => {
       assert.ok(Buffer.isBuffer(frame.data));
+      retainedFrame ??= frame.data;
       assert.equal(frame.data.readUInt16BE(0), 0xffd8);
       assert.equal(frame.width, 160);
       assert.equal(frame.height, 96);
@@ -63,6 +65,7 @@ test('managed recording and native JPEG subscribers share one upstream and indep
     const before = committed.length;
     await frames.stop();
     await frameLease.release();
+    assert.equal(retainedFrame?.readUInt16BE(0), 0xffd8);
     await until(() => recordLease.status.decoder === 'idle');
     assert.equal(recordLease.status.recording, true);
     const stoppedFrames = delivered;

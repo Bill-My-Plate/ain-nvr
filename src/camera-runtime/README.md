@@ -6,6 +6,8 @@ Owns the process-wide managed camera registry, leases, worker and decoder lifecy
 
 `getCameraRuntime` returns one registry for a context. A caller acquires a lease, and `CameraOwner` shares one worker across leases for the same camera. `CameraWorkerHost` starts the worker. Inside it, `CameraEngine` coordinates the RTSP session, commands, status, and shutdown. `CameraRecordingController` owns the camera module's recorder and its event acknowledgements. `CameraFrameController` owns frame subscribers, the loopback bridge, and the decoder lifecycle; `DecoderProcess` starts the separate JPEG process. The owner restarts a failed worker within its configured budget and closes resources after the last lease or runtime closes.
 
+Each frame subscriber gets a private JPEG byte buffer. The worker transfers that buffer to the main thread through the frame port; the main thread wraps the received bytes as a `Buffer` without copying them again. Frame acknowledgements bound outstanding work. The decoder remains a separate process and still sends JPEGs through process IPC.
+
 **Internal entry point:** [`index.ts`](index.ts). The published `ain-nvr/camera-runtime` facade and root re-export retain the same names in ESM and CommonJS.
 
 ## Module API

@@ -15,6 +15,6 @@ export type FrameMessage = {
   consumerId: string;
   /** Sequence number used to match messages with acknowledgements. */
   sequence: number;
-  /** Decoded or encoded frame delivered by this operation. */
-  frame: ExtractedJpegFrame;
+  /** JPEG metadata and bytes whose ArrayBuffer is transferred to the host. */
+  frame: Omit<ExtractedJpegFrame, 'data'> & { readonly data: Uint8Array };
 };

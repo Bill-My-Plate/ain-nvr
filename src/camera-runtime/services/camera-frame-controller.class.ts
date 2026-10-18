@@ -195,15 +195,20 @@ export class CameraFrameController {
       }
       slot.awaiting = true;
       slot.sequence++;
+      // Each subscriber owns its bytes; transfer that dedicated backing store
+      // instead of cloning the JPEG again across the worker message port.
+      const backing = new ArrayBuffer(frame.data.byteLength);
+      const data = new Uint8Array(backing);
+      data.set(frame.data);
       const message: FrameMessage = {
         kind: 'frame',
         epoch: this.epoch,
         generation,
         consumerId,
         sequence: slot.sequence,
-        frame: { ...frame, data: Buffer.from(frame.data) },
+        frame: { ...frame, data },
       };
-      this.framePort.postMessage(message);
+      this.framePort.postMessage(message, [backing]);
       this.delivered++;
     }
   }

@@ -425,9 +425,12 @@ export class CameraOwner {
     this.update({ streamGeneration: message.generation, decoder: 'ready' });
     clearTimeout(consumer.timer);
     consumer.busy = true;
+    const bytes = message.frame.data;
     const frame = {
       ...message.frame,
-      data: Buffer.from(message.frame.data),
+      // The worker transferred this ArrayBuffer, so this Buffer is a view of
+      // the received bytes rather than another JPEG copy.
+      data: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
       frameNumber: consumer.frameNumber++,
     };
     void deadline(
