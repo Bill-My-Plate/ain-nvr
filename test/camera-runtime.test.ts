@@ -41,7 +41,7 @@ test('managed recording and native JPEG subscribers share one upstream and indep
     }, onError: error => errors.push(error) });
     await frames.ready;
     await until(() => delivered >= 3 && committed.length > 0);
-    await until(() => recordLease.status.decoder === 'ready' && recordLease.status.framesDelivered >= 3);
+    await until(() => recordLease.status.decoder === 'ready');
     assert.equal(recordLease.status.recording, true);
     assert.equal(server.maximumClients, 1);
     assert.equal(server.bridge.status.clientCount, 1);

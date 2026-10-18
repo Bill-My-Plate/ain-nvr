@@ -68,7 +68,6 @@ test('loopback bridge serves SDP and forwards original RTP over negotiated TCP c
     assert.match(session.sdp, /sprop-parameter-sets=/u);
 
     assert.deepEqual(await received, packet.frame.payload);
-    assert.equal(bridge.status.forwardedPackets, 1);
     assert.equal(source.subscriptions, 1);
   } finally {
     await client.close();
@@ -91,7 +90,6 @@ test('loopback bridge drops only a slow local client at its queue limit', async 
     }));
     source.emit(mediaPacket(1, 90_000, Buffer.from([0x65, 1, 2])));
     await disconnected;
-    assert.equal(bridge.status.droppedClients, 1);
     assert.equal(source.unsubscriptions, 0);
   } finally {
     await client.close();

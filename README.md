@@ -386,6 +386,75 @@ await extractor.stop();
 The URL-based form creates its own camera connection. Prefer the shared form
 when recording or live view already owns an `RtspStreamSession`.
 
+## Automatic limits and recovery
+
+These rules apply to the managed camera runtime and its cache writer unless a
+lower-level component is named. The host still owns retention, cleanup of old
+recordings, and any retry after a recording failure.
+
+### Recording and disk space
+
+- Before writing a packet, the managed cache writer checks available space on
+  `cacheRoot` at most once per 10 seconds of packet arrival time. If it is below
+  `minimumFreeBytes` (512 MiB by default), that recording fails with `ENOSPC`.
+  Its `onError` callback is called and its completion promise rejects. Existing
+  incomplete media remains partial; the package does not delete old recordings
+  to make space or restart the recording when space returns. Frame extraction
+  for the same camera can continue. This check runs only while packets are
+  being written, not as a background disk monitor. Applications that supply
+  their own `RecordingPipeline` writer must implement their own disk policy.
+- The managed recorder buffers media while its writer starts. It pauses the
+  source at 4 MiB and fails that recording if the startup buffer exceeds 8 MiB
+  or reaches 4,096 packets. The normal recording write queue pauses its source
+  at 8 MiB, resumes at 4 MiB, and fails at 16 MiB or 4,096 packets by default.
+  A pipeline or writer failure stops that recording, not other camera consumers.
+- Recording notifications are bounded to 128 unacknowledged worker events by
+  default (`maximumPendingEvents`). Additional commit or session-close events
+  are dropped while the limit is full. A timed-out or failed notification
+  callback reports an error and suppresses later notifications for that
+  recording. Callers must not treat callbacks alone as a complete recovery or
+  retention policy.
+
+### Connections and workers
+
+- The managed registry allows 32 cameras, four concurrent camera starts, 128
+  leases per camera, and 16 frame subscribers per camera by default. Excess
+  cameras, leases, or frame subscribers are rejected; starts above the
+  concurrent-start limit wait for a slot. Camera acquisition has a 20-second
+  deadline and worker commands have a 30-second deadline by default. These
+  values are configurable through `CameraRuntimeOptions`.
+- `RtspClient` closes a connection after 15 seconds without RTP on a negotiated
+  media channel by default. It also sends session keepalives and tries the
+  other supported keepalive method if a camera rejects the first. A
+  `RtspStreamSession` reconnects after disconnection with exponential waits
+  starting at 1 second and capped at 30 seconds. A direct `RtspClient` does
+  not reconnect itself.
+- The managed runtime can replace a failed camera worker once by default
+  (`maxWorkerRestarts`), after a 500 ms delay (`restartDelayMs`), and reattach
+  active recording and frame consumers. RTSP reconnects do not consume this
+  worker restart budget. Terminal authentication, unsupported codec, and
+  unsupported transport failures do not trigger a worker restart.
+
+### Frames and local adapters
+
+- Each managed frame subscriber has one outstanding JPEG acknowledgement slot.
+  Frames are skipped when that slot is busy, the JPEG exceeds 8 MiB, or it is
+  more than 2 seconds old by default. A subscriber that receives no first JPEG
+  within 30 seconds, or whose frame callback exceeds 10 seconds, fails without
+  stopping an active recording. These limits are configurable through
+  `CameraRuntimeOptions`.
+- A standalone `RtspUrlFrameExtractor` closes a decoding session after 15
+  seconds without a decoded frame by default. It reports the error and retries
+  with delays starting at 1 second and capped at 30 seconds. Its JPEG queue
+  retains at most one waiting native frame and destroys later arrivals until
+  the queue advances.
+- A live `RtspLoopbackBridge` accepts two local clients by default and
+  disconnects a client whose socket queue would exceed 8 MiB. It retains at
+  most 8 MiB or 4,096 packets of preroll, discarding the oldest packets first.
+  The playback RTSP bridge instead fails a send when its client queue exceeds
+  8 MiB by default. `RtpUdpForwarder` drops new packets while 1,024 sends are
+  pending by default.
+
 ## Repository rules
 
 See [AGENTS.md](AGENTS.md) for the rules we will expand during refactoring.

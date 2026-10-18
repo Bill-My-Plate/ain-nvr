@@ -297,7 +297,6 @@
     "recording-parser:RecordingPacketSource",
     "recording-parser:RecordingPacketWriter",
     "recording-parser:RecordingParserOptions",
-    "recording-parser:RecordingParserStatus",
     "recording-parser:RecordingPipelineOptions",
     "recording-parser:RecordingPipelineStatus",
     "recording-parser:RecordingWriteRequest",

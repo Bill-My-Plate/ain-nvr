@@ -63,8 +63,6 @@ test('URL extractor bounds queued frames and releases them on stop', { timeout: 
     for (let attempt = 0; attempt < 100 && reads < 3; attempt++) await delay(5);
     assert.equal(reads, 3);
     assert.equal(extractor.state, 'extracting');
-    assert.equal(extractor.status.decodedFrames, 3);
-    assert.equal(extractor.status.droppedFrames, 1);
     assert.deepEqual(destroyed.sort(), [0, 2]);
 
     const stopped = extractor.stop();
@@ -73,7 +71,6 @@ test('URL extractor bounds queued frames and releases them on stop', { timeout: 
     releaseCallback();
     await stopped;
     assert.deepEqual(received, [0]);
-    assert.equal(extractor.status.emittedFrames, 1);
     assert.deepEqual(destroyed.sort(), [0, 1, 2]);
     assert.ok(closes >= 1);
     assert.equal(extractor.state, 'stopped');
@@ -125,7 +122,6 @@ test('URL extractor reports a failed connection and starts another session', { t
     assert.equal(extractor.state, 'extracting');
     assert.equal(contexts, 2);
     assert.deepEqual(errors.map((error) => error.message), ['connection lost']);
-    assert.equal(extractor.status.decodedFrames, 1);
   } finally {
     await extractor.stop();
   }

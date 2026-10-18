@@ -21,8 +21,6 @@ export class CameraFrameController {
   private state: 'idle' | 'starting' | 'ready' | 'failed' = 'idle';
   private failed = false;
   private firstFrameTimer: NodeJS.Timeout | undefined;
-  private delivered = 0;
-  private dropped = 0;
 
   /** Attaches acknowledgements to the frame port and starts receiving them. */
   public constructor(
@@ -47,16 +45,6 @@ export class CameraFrameController {
   /** Current decoder state included in camera status. */
   public get decoderState(): 'idle' | 'starting' | 'ready' | 'failed' {
     return this.state;
-  }
-
-  /** Number of frames delivered to subscribers. */
-  public get framesDelivered(): number {
-    return this.delivered;
-  }
-
-  /** Number of frames omitted by backpressure, size, or age limits. */
-  public get framesDropped(): number {
-    return this.dropped;
   }
 
   /** Replaces the decoder when an active stream enters a new generation. */
@@ -190,7 +178,6 @@ export class CameraFrameController {
         frame.data.length > this.settings.maximumFrameBytes ||
         Date.now() - frame.captureTimeMs > this.settings.maximumFrameAgeMs
       ) {
-        this.dropped++;
         continue;
       }
       slot.awaiting = true;
@@ -209,7 +196,6 @@ export class CameraFrameController {
         frame: { ...frame, data },
       };
       this.framePort.postMessage(message, [backing]);
-      this.delivered++;
     }
   }
 }

@@ -9,8 +9,6 @@ export interface RecordingPipelineStatus {
   readonly queuedBytes: number;
   /** Number of packets waiting in the writer queue. */
   readonly queuedPackets: number;
-  /** Number of packets successfully written. */
-  readonly writtenPackets: number;
   /** Most recent failure retained for status reporting. */
   readonly lastError?: Error;
 }

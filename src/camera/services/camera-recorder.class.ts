@@ -28,13 +28,6 @@ export class CameraRecorder {
     private readonly options: RecorderOptions,
   ) {}
   /**
-   * Returns the number of bytes queued for recording.
-   */
-  public get queuedBytes(): number {
-    return this.pipeline?.status.queuedBytes ?? 0;
-  }
-
-  /**
    * Starts the operation and initializes its resources.
    */
   public async start(): Promise<void> {

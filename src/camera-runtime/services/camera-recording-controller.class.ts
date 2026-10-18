@@ -11,7 +11,6 @@ export class CameraRecordingController {
   private readonly events = new Set<number>();
   private recorder: { id: string; value: CameraRecorder } | undefined;
   private progressPending = false;
-  private needsReconciliation = false;
   private sequence = 0;
 
   /** Captures the session and callbacks used to report recording outcomes. */
@@ -21,7 +20,6 @@ export class CameraRecordingController {
     private readonly epoch: number,
     private readonly settings: RuntimeSettings,
     private readonly send: (message: WorkerMessage) => void,
-    private readonly onStatusChange: () => void,
   ) {}
 
   /** Whether one recording consumer owns the recorder. */
@@ -29,20 +27,9 @@ export class CameraRecordingController {
     return this.recorder !== undefined;
   }
 
-  /** Bytes queued by the current recorder, if any. */
-  public get queuedBytes(): number {
-    return this.recorder?.value.queuedBytes ?? 0;
-  }
-
-  /** Whether a lost event or writer failure requires a storage scan. */
-  public get reconciliationNeeded(): boolean {
-    return this.needsReconciliation;
-  }
-
   /** Releases one event slot after its host acknowledgement. */
-  public acknowledgeEvent(sequence: number, failed: boolean): void {
+  public acknowledgeEvent(sequence: number): void {
     this.events.delete(sequence);
-    if (failed) this.needsReconciliation = true;
   }
 
   /** Starts the only recorder and clears ownership if startup fails. */
@@ -61,7 +48,6 @@ export class CameraRecordingController {
           sessionStartMs,
         }),
       onError: (error) => {
-        this.needsReconciliation = true;
         this.send({
           kind: 'consumer-error',
           epoch: this.epoch,
@@ -118,11 +104,9 @@ export class CameraRecordingController {
     this.recorder = undefined;
   }
 
-  /** Sends a bounded recording event or marks storage reconciliation necessary. */
+  /** Sends a bounded recording event. */
   private recordingEvent(consumerId: string, event: RecordingEvent): void {
     if (this.events.size >= this.settings.maximumPendingEvents) {
-      this.needsReconciliation = true;
-      this.onStatusChange();
       return;
     }
     const sequence = ++this.sequence;

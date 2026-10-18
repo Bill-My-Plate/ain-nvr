@@ -4,7 +4,6 @@ export type { RecordingWriteRequest } from './types/recording-write-request.inte
 export type { RecordingPacketWriter } from './types/recording-packet-writer.interface.js';
 export type { RecordingIndexEvent } from './types/recording-index-event.type.js';
 export type { RecordingParserOptions } from './types/recording-parser-options.interface.js';
-export type { RecordingParserStatus } from './types/recording-parser-status.interface.js';
 export { RecordingPipeline } from './services/recording-pipeline.class.js';
 export type { RecordingPacketSource } from './types/recording-packet-source.interface.js';
 export type { RecordingPipelineState } from './types/recording-pipeline-state.type.js';

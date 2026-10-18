@@ -6,7 +6,6 @@ import { RtpReorderBuffer } from '../../rtp-parser/index.js';
 import type { RecordingPacketWriter } from '../types/recording-packet-writer.interface.js';
 import type { RecordingIndexEvent } from '../types/recording-index-event.type.js';
 import type { RecordingParserOptions } from '../types/recording-parser-options.interface.js';
-import type { RecordingParserStatus } from '../types/recording-parser-status.interface.js';
 import type { OrderedInput } from '../types/ordered-input.type.js';
 import type { DiscontinuityReason } from '../types/discontinuity-reason.type.js';
 import { RecordingIndexWriter } from './recording-index-writer.class.js';
@@ -18,12 +17,6 @@ export class RecordingParser<TLocation> {
   private readonly indexWriter: RecordingIndexWriter<TLocation>;
   private readonly reorder = new Map<string, RtpReorderBuffer<MediaPacket>>();
   private readonly safeBoundary: RecordingSafeBoundary<TLocation> | undefined;
-  private mutableStatus: RecordingParserStatus = {
-    reorderedPackets: 0,
-    duplicatePackets: 0,
-    lostPackets: 0,
-    discontinuities: 0,
-  };
   /**
    * Creates the instance and initializes its state.
    */
@@ -61,13 +54,6 @@ export class RecordingParser<TLocation> {
   }
 
   /**
-   * Returns a snapshot of the current status.
-   */
-  public get status(): RecordingParserStatus {
-    return { ...this.mutableStatus };
-  }
-
-  /**
    * Request Boundary.
    */
   public requestBoundary(): void {
@@ -98,10 +84,6 @@ export class RecordingParser<TLocation> {
     const events: RecordingIndexEvent<TLocation>[] = [];
     if (reason !== undefined) {
       const flushed = reorder.flush();
-      this.mutableStatus = {
-        ...this.mutableStatus,
-        lostPackets: this.mutableStatus.lostPackets + flushed.lost,
-      };
       for (const ordered of flushed.packets) {
         events.push(
           ...(await this.writeWithBoundaryPolicy(
@@ -115,19 +97,9 @@ export class RecordingParser<TLocation> {
       }
       reorder.reset();
       this.indexWriter.markDiscontinuity(reason);
-      this.mutableStatus = {
-        ...this.mutableStatus,
-        discontinuities: this.mutableStatus.discontinuities + 1,
-      };
     }
 
     const result = reorder.push(packet.rtp.sequenceNumber, packet);
-    this.mutableStatus = {
-      ...this.mutableStatus,
-      reorderedPackets: this.mutableStatus.reorderedPackets + (result.reordered ? 1 : 0),
-      duplicatePackets: this.mutableStatus.duplicatePackets + (result.duplicate ? 1 : 0),
-      lostPackets: this.mutableStatus.lostPackets + result.lost,
-    };
     for (const ordered of result.packets) {
       const orderedEvents = await this.writeWithBoundaryPolicy(
         {
@@ -150,10 +122,6 @@ export class RecordingParser<TLocation> {
     const events: RecordingIndexEvent<TLocation>[] = [];
     for (const reorder of this.reorder.values()) {
       const result = reorder.flush();
-      this.mutableStatus = {
-        ...this.mutableStatus,
-        lostPackets: this.mutableStatus.lostPackets + result.lost,
-      };
       for (const ordered of result.packets) {
         events.push(
           ...(await this.writeWithBoundaryPolicy(

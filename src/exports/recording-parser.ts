@@ -4,7 +4,6 @@ export {
   type RecordingIndexEvent,
   type RecordingPacketWriter,
   type RecordingParserOptions,
-  type RecordingParserStatus,
   type RecordingWriteRequest,
 } from '../recording-parser/index.js';
 export {

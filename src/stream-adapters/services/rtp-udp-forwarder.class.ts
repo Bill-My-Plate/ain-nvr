@@ -13,8 +13,6 @@ export class RtpUdpForwarder {
   private readonly socket: Socket;
   private unsubscribe: (() => void) | undefined;
   private pendingPackets = 0;
-  private forwardedPackets = 0;
-  private droppedPackets = 0;
   private stopped = false;
   /**
    * Creates the instance and initializes its state.
@@ -49,8 +47,6 @@ export class RtpUdpForwarder {
    */
   public get status(): RtpUdpForwarderStatus {
     return {
-      forwardedPackets: this.forwardedPackets,
-      droppedPackets: this.droppedPackets,
       pendingPackets: this.pendingPackets,
     };
   }
@@ -79,17 +75,13 @@ export class RtpUdpForwarder {
   private forward(packet: MediaPacket): void {
     if (this.stopped || packet.track?.mediaType !== 'video' || packet.rtp === undefined) return;
     if (this.pendingPackets >= this.maximumPendingPackets) {
-      this.droppedPackets += 1;
       return;
     }
     this.pendingPackets += 1;
     this.socket.send(packet.frame.payload, this.options.port, this.host, (error) => {
       this.pendingPackets -= 1;
       if (error !== null) {
-        this.droppedPackets += 1;
         this.options.onError?.(error);
-      } else {
-        this.forwardedPackets += 1;
       }
     });
   }

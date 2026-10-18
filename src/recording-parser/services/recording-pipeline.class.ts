@@ -13,7 +13,6 @@ export class RecordingPipeline<TLocation> {
   private readonly parser: RecordingParser<TLocation>;
   private readonly queue: RecordingPacketQueue;
   private stateValue: RecordingPipelineState = 'idle';
-  private writtenPackets = 0;
   private stopping = false;
   private unsubscribe: (() => void) | undefined;
   private runPromise: Promise<void> | undefined;
@@ -34,7 +33,6 @@ export class RecordingPipeline<TLocation> {
       state: this.stateValue,
       queuedBytes: this.queue.queuedBytes,
       queuedPackets: this.queue.queuedPackets,
-      writtenPackets: this.writtenPackets,
       ...(this.lastError === undefined ? {} : { lastError: this.lastError }),
     };
   }
@@ -97,7 +95,6 @@ export class RecordingPipeline<TLocation> {
         continue;
       }
       const events = await this.parser.process(packet, this.options.writer);
-      this.writtenPackets += 1;
       if (events.length > 0) await this.options.onIndexEvents?.(events);
       if (this.status.state !== 'failed') await this.options.onBatchComplete?.();
     }

@@ -15,10 +15,6 @@ import { wallClockTime } from '../utils/wall-clock-time.util.js';
 export class RecordedRtspParser {
   readonly maximumPacketBytes: number;
   readonly reorderWindowPackets: number;
-  reorderedPackets = 0;
-  duplicatePackets = 0;
-  lostPackets = 0;
-  discontinuities = 0;
   /**
    * Creates the instance and initializes its state.
    */
@@ -141,11 +137,9 @@ export class RecordedRtspParser {
           -RECORDED_STREAM_CONSTANTS.maximumTimestampDiscontinuityMs;
       if (discontinuity) {
         const flushed = reorder.flush();
-        this.lostPackets += flushed.lost;
         for (const ordered of flushed.packets)
           yield this.withGap(ordered.value, ordered.lostBefore);
         reorder.reset();
-        this.discontinuities += 1;
       }
       packet = {
         ...packet,
@@ -155,16 +149,12 @@ export class RecordedRtspParser {
       lastSsrc.set(track.trackId, rtp.ssrc);
       lastTimestamp.set(track.trackId, rtp.timestamp);
       const result = reorder.push(rtp.sequenceNumber, packet);
-      if (result.reordered) this.reorderedPackets += 1;
-      if (result.duplicate) this.duplicatePackets += 1;
-      this.lostPackets += result.lost;
       for (const ordered of result.packets) yield this.withGap(ordered.value, ordered.lostBefore);
     }
 
     // Release held tail packets only after reaching the committed byte boundary.
     for (const reorder of reorderByTrack.values()) {
       const result = reorder.flush();
-      this.lostPackets += result.lost;
       for (const ordered of result.packets) yield this.withGap(ordered.value, ordered.lostBefore);
     }
   }

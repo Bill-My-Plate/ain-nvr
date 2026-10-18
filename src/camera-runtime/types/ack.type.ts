@@ -8,6 +8,4 @@ export type Ack = {
   epoch: number;
   /** Sequence number used to match messages with acknowledgements. */
   sequence: number;
-  /** Whether the corresponding operation failed. */
-  failed: boolean;
 };

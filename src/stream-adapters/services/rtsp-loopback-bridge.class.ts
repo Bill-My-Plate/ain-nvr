@@ -26,8 +26,6 @@ export class RtspLoopbackBridge {
   private readonly clients = new Set<BridgeClient>();
   private readonly token = randomBytes(STREAM_ADAPTER_CONSTANTS.loopbackTokenBytes).toString('hex');
   private unsubscribe: (() => void) | undefined;
-  private forwardedPackets = 0;
-  private droppedClients = 0;
   private running = false;
   private stopped = false;
   private startPromise: Promise<string> | undefined;
@@ -84,8 +82,6 @@ export class RtspLoopbackBridge {
       playingClientCount: [...this.clients].filter((client) => client.playing).length,
       prerollBytes: this.media.prerollBytes,
       prerollPackets: this.media.prerollPackets,
-      forwardedPackets: this.forwardedPackets,
-      droppedClients: this.droppedClients,
     };
   }
 
@@ -151,7 +147,6 @@ export class RtspLoopbackBridge {
   private accept(socket: Socket): void {
     socket.setNoDelay(true);
     if (this.clients.size >= this.maximumClients) {
-      this.droppedClients += 1;
       socket.destroy();
       return;
     }
@@ -213,12 +208,10 @@ export class RtspLoopbackBridge {
       frame.payload,
     );
     if (client.socket.writableLength + raw.length > this.maximumClientQueuedBytes) {
-      this.droppedClients += 1;
       client.socket.destroy();
       return;
     }
     client.socket.write(raw);
-    this.forwardedPackets += 1;
   }
 
   /** Closes clients whose transport no longer matches the source track. */

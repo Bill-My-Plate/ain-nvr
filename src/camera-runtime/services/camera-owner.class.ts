@@ -55,11 +55,6 @@ export class CameraOwner {
       streamGeneration: 0,
       recording: false,
       decoder: 'idle',
-      framesDelivered: 0,
-      framesDropped: 0,
-      recordingQueuedBytes: 0,
-      workerEventLoopDelayMs: 0,
-      reconciliationNeeded: false,
     };
     this.started = Promise.resolve()
       .then(() => this.spawn())
@@ -228,7 +223,7 @@ export class CameraOwner {
         await this.host?.close();
       } catch (error) {
         closeError = error;
-        this.update({ reconciliationNeeded: true, lastError: asError(error) });
+        this.update({ lastError: asError(error) });
       }
       for (const c of this.consumers.values()) {
         if (closeError === undefined) c.completion.resolve();
@@ -269,7 +264,7 @@ export class CameraOwner {
    */
   private failed(error: Error, terminal: boolean): void {
     if (this.abort.signal.aborted) return;
-    this.update({ lastError: error, reconciliationNeeded: true });
+    this.update({ lastError: error });
     if (!this.initialized) {
       this.terminalError = error;
       return;
@@ -372,10 +367,6 @@ export class CameraOwner {
         else {
           consumer.completion.reject(stoppedError);
           this.report(consumer, asError(stoppedError));
-          this.update({
-            reconciliationNeeded:
-              consumer.kind === 'record' || this.statusValue.reconciliationNeeded,
-          });
         }
       }
       if (stoppedError !== undefined) throw stoppedError;
@@ -466,8 +457,6 @@ export class CameraOwner {
           this.statusValue.streamGeneration,
           message.status.streamGeneration,
         ),
-        reconciliationNeeded:
-          this.statusValue.reconciliationNeeded || message.status.reconciliationNeeded,
       });
       this.host?.send({ kind: 'status-ack', epoch: this.epoch });
     } else if (message.kind === 'consumer-error') {
@@ -486,17 +475,16 @@ export class CameraOwner {
     } else if (message.kind === 'event') {
       const host = this.host;
       const consumer = this.consumers.get(message.consumerId);
-      const ack = (failed: boolean): void =>
-        host?.send({ kind: 'event-ack', epoch: message.epoch, sequence: message.sequence, failed });
+      const ack = (): void =>
+        host?.send({ kind: 'event-ack', epoch: message.epoch, sequence: message.sequence });
       if (consumer?.kind !== 'record') {
-        this.update({ reconciliationNeeded: true });
-        ack(true);
+        ack();
         return;
       }
       // Event count is bounded by worker credits; callbacks preserve publication order.
       consumer.events = consumer.events.then(async () => {
         if (consumer.deliveryFailed) {
-          ack(true);
+          ack();
           return;
         }
         try {
@@ -512,14 +500,14 @@ export class CameraOwner {
             this.settings.callbackTimeoutMs,
             'Recording notification callback timed out.',
           );
-          ack(false);
+          ack();
         } catch (error) {
           // A timed-out callback cannot be canceled. Stop further notifications so
           // unresolved application promises cannot accumulate indefinitely.
           consumer.deliveryFailed = true;
-          this.update({ reconciliationNeeded: true, lastError: asError(error) });
+          this.update({ lastError: asError(error) });
           this.report(consumer, asError(error));
-          ack(true);
+          ack();
         }
       });
     }

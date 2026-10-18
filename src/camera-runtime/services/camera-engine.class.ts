@@ -1,4 +1,3 @@
-import { monitorEventLoopDelay } from 'node:perf_hooks';
 import type { MessagePort } from 'node:worker_threads';
 import { type CameraStatus } from '../../camera/index.js';
 import { RtspStreamSession } from '../../stream-session/index.js';
@@ -15,9 +14,6 @@ import type { WorkerMessage } from '../types/worker-message.type.js';
 export class CameraEngine {
   private readonly session: RtspStreamSession;
   private readonly abort = new AbortController();
-  private readonly loopDelay = monitorEventLoopDelay({
-    resolution: CAMERA_RUNTIME_CONSTANTS.eventLoopResolutionMs,
-  });
   private readonly recording: CameraRecordingController;
   private readonly frames: CameraFrameController;
   private readonly timer: NodeJS.Timeout;
@@ -38,7 +34,7 @@ export class CameraEngine {
   ) {
     this.session = new RtspStreamSession({ url });
     this.recording = new CameraRecordingController(
-      this.session, cameraId, epoch, settings, send, () => this.publishStatus(),
+      this.session, cameraId, epoch, settings, send,
     );
     this.frames = new CameraFrameController(
       this.session, cameraId, epoch, settings, framePort, this.abort.signal,
@@ -65,7 +61,6 @@ export class CameraEngine {
         void this.close().catch(() => undefined);
       }
     });
-    this.loopDelay.enable();
     this.timer = setInterval(() => {
       this.recording.publishProgress(this.statusPending);
       this.publishStatus();
@@ -86,8 +81,8 @@ export class CameraEngine {
   }
 
   /** Releases a recording event slot after the host acknowledges it. */
-  public acknowledgeEvent(sequence: number, failed: boolean): void {
-    this.recording.acknowledgeEvent(sequence, failed);
+  public acknowledgeEvent(sequence: number): void {
+    this.recording.acknowledgeEvent(sequence);
   }
 
   /** Allows the next status snapshot after the host acknowledges this one. */
@@ -120,7 +115,6 @@ export class CameraEngine {
     this.unsubscribe();
     this.frames.beginClose();
     clearInterval(this.timer);
-    this.loopDelay.disable();
     this.closing = (async () => {
       const results = await Promise.allSettled([
         this.recording.close(),
@@ -145,8 +139,6 @@ export class CameraEngine {
   private publishStatus(): void {
     if (this.statusPending) return;
     this.statusPending = true;
-    const delay = this.loopDelay.max / CAMERA_RUNTIME_CONSTANTS.nanosecondsPerMillisecond;
-    this.loopDelay.reset();
     this.send({
       kind: 'status',
       epoch: this.epoch,
@@ -157,11 +149,6 @@ export class CameraEngine {
         streamGeneration: this.generation,
         recording: this.recording.active,
         decoder: this.frames.decoderState,
-        framesDelivered: this.frames.framesDelivered,
-        framesDropped: this.frames.framesDropped,
-        recordingQueuedBytes: this.recording.queuedBytes,
-        workerEventLoopDelayMs: Number.isFinite(delay) ? delay : 0,
-        reconciliationNeeded: this.recording.reconciliationNeeded,
       },
     });
   }

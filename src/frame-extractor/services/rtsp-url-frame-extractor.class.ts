@@ -23,8 +23,6 @@ export class RtspUrlFrameExtractor {
   private stateValue: FrameExtractorState = 'idle';
   private frameNumber = 0;
   private decodedFrames = 0;
-  private emittedFrames = 0;
-  private droppedFrames = 0;
 
   /** Validates the public settings and resolves defaults. */
   public constructor(private readonly options: RtspUrlFrameExtractorOptions) {
@@ -64,25 +62,6 @@ export class RtspUrlFrameExtractor {
   /** Returns the current lifecycle state. */
   public get state(): FrameExtractorState {
     return this.stateValue;
-  }
-
-  /** Returns a snapshot of decoded, delivered, and queue-rejected frames. */
-  public get status(): Readonly<{
-    /** Current extractor lifecycle state. */
-    state: FrameExtractorState;
-    /** Number of decoded frames seen by the extractor. */
-    decodedFrames: number;
-    /** Number of JPEG frames delivered to callbacks. */
-    emittedFrames: number;
-    /** Number of frames skipped or rejected. */
-    droppedFrames: number;
-  }> {
-    return {
-      state: this.stateValue,
-      decodedFrames: this.decodedFrames,
-      emittedFrames: this.emittedFrames,
-      droppedFrames: this.droppedFrames,
-    };
   }
 
   /** Initializes the runtime and starts retrying RTSP sessions. */
@@ -125,8 +104,6 @@ export class RtspUrlFrameExtractor {
           onFrame: this.options.onFrame,
           onState: (state) => { this.stateValue = state; },
           onDecoded: () => { this.decodedFrames += 1; },
-          onEmitted: () => { this.emittedFrames += 1; },
-          onDropped: () => { this.droppedFrames += 1; },
           nextFrameNumber: () => this.frameNumber++,
         });
         this.activeSession = session;

@@ -23,16 +23,6 @@ export interface CameraStatus {
   readonly recording: boolean;
   /** Decoder selection or current decoder state. */
   readonly decoder: 'idle' | 'starting' | 'ready' | 'failed';
-  /** Number of JPEG frames delivered to subscribers. */
-  readonly framesDelivered: number;
-  /** Number of JPEG frames omitted or rejected. */
-  readonly framesDropped: number;
-  /** Recording queued measured in bytes. */
-  readonly recordingQueuedBytes: number;
-  /** Worker event loop delay in milliseconds. */
-  readonly workerEventLoopDelayMs: number;
-  /** Scan committed cache artifacts after writer ownership has been released. Sticky. */
-  readonly reconciliationNeeded: boolean;
   /** Most recent failure retained for status reporting. */
   readonly lastError?: Error;
 }

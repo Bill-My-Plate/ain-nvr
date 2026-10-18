@@ -23,7 +23,6 @@ export class FrameJpegQueue {
       this.pending = item;
     } else {
       item.frame.destroy();
-      this.options.onDropped();
     }
   }
 
@@ -54,7 +53,6 @@ export class FrameJpegQueue {
         height,
         decoder: item.decoder,
       });
-      this.options.onEmitted();
     })()
       .catch((error: unknown) => {
         this.processingFailure = error instanceof Error ? error : new Error(String(error));

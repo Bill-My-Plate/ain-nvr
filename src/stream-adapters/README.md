@@ -13,10 +13,10 @@ RtspLoopbackBridge owns the local listener and clients. Its media state tracks H
 - **`RtspLoopbackBridge`** (value): Serves a live packet source to a local RTSP client.
 - **`RtspBridgePacketSource`** (type): Live packet subscription contract for a bridge.
 - **`RtspLoopbackBridgeOptions`** (type): Bridge source and listener settings.
-- **`RtspLoopbackBridgeStatus`** (type): Bridge listener/client and stream status.
+- **`RtspLoopbackBridgeStatus`** (type): Bridge listener, client, and preroll state.
 - **`RtpUdpForwarder`** (value): Forwards RTP packets from a session to UDP destinations.
 - **`RtpUdpForwarderOptions`** (type): Destinations and track settings for forwarding.
-- **`RtpUdpForwarderStatus`** (type): Forwarding counters and lifecycle status.
+- **`RtpUdpForwarderStatus`** (type): Current pending packet count.
 - **`PlaybackRtspBridge`** (value): Feeds playback media through a local RTSP server.
 - **`PlaybackRtspBridgeOptions`** (type): Playback source and server settings.
 - **`PlaybackRtspBridgeStart`** (type): URL and state returned when playback serving begins.

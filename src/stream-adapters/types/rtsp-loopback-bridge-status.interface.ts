@@ -12,8 +12,4 @@ export interface RtspLoopbackBridgeStatus {
   readonly prerollBytes: number;
   /** Number of packets retained for new clients. */
   readonly prerollPackets: number;
-  /** Number of RTP or RTCP packets forwarded to clients. */
-  readonly forwardedPackets: number;
-  /** Number of clients disconnected due to errors or backpressure. */
-  readonly droppedClients: number;
 }

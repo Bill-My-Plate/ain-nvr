@@ -37,7 +37,6 @@ test('worker death restores recording and frames after old ownership exits', { t
     await until(() => new Set(commits.map(segment => segment.sessionStartMs)).size >= 2);
     assert.ok(frames.every((number, index) => index === 0 || number > frames[index - 1]!));
     assert.equal(server.maximumClients, 1);
-    assert.equal(owner.status.reconciliationNeeded, true);
     assert.deepEqual(errors, []);
     await frame.handle.stop();
     await recording.handle.stop();

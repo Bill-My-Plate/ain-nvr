@@ -36,7 +36,7 @@ function startCameraWorkerEntry(): void {
   port.on('message', (message: HostMessage) => {
     if (message.epoch !== epoch) return;
     if (message.kind === 'event-ack') {
-      engine.acknowledgeEvent(message.sequence, message.failed);
+      engine.acknowledgeEvent(message.sequence);
       return;
     }
     if (message.kind === 'status-ack') {

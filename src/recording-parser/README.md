@@ -18,12 +18,11 @@ Converts live media packets into recording write requests and index events. It t
 - **`RecordingPacketWriter`** (type): Writer contract consumed by the parser or pipeline.
 - **`RecordingIndexEvent`** (type): Index update emitted while recording.
 - **`RecordingParserOptions`** (type): Parser tracks, timing and reorder settings.
-- **`RecordingParserStatus`** (type): Parser counters and state snapshot.
 - **`RecordingPipeline`** (value): Consumes a source and drives the parser and writer lifecycle.
 - **`RecordingPacketSource`** (type): Subscription contract for live packets.
 - **`RecordingPipelineState`** (type): Pipeline lifecycle state.
 - **`RecordingPipelineOptions`** (type): Source, writer, queue and lifecycle settings.
-- **`RecordingPipelineStatus`** (type): Pipeline state and queue counters.
+- **`RecordingPipelineStatus`** (type): Pipeline state and queue depth.
 
 ## Files and review
 
