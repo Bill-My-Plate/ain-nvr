@@ -16,6 +16,8 @@ export type DecoderCommand =
       profile: FrameProfile;
       /** Maximum frame measured in bytes. */
       maximumFrameBytes: number;
+      /** Whether the child must use the CPU, including after a hardware process failure. */
+      softwareOnly: boolean;
     }
   | {
       /** Discriminant or media type used to interpret this value. */

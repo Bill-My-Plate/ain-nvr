@@ -1,5 +1,7 @@
 # frame-extractor
 
+On Linux, hardware selection checks whether the process can read and write each DRM render device. Without an accessible render device or a configured CUDA environment, the extractor uses the CPU. A software-only request skips all hardware candidates.
+
 Turns live RTSP video into sampled JPEG frames. It selects a usable decoder, loads Scrypted libav, and can either connect to a URL directly or consume a shared RTSP loopback bridge.
 
 ## How it works

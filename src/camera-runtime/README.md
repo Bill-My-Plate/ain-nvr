@@ -8,6 +8,8 @@ Owns the process-wide managed camera registry, leases, worker and decoder lifecy
 
 Each frame subscriber gets a private JPEG byte buffer. The worker transfers that buffer to the main thread through the frame port; the main thread wraps the received bytes as a `Buffer` without copying them again. Frame acknowledgements bound outstanding work. The decoder remains a separate process and still sends JPEGs through process IPC.
 
+On Linux, a decoder child that fails during hardware decoding gets one CPU-only retry. The retry keeps the same RTSP bridge, worker, and frame subscriptions. The replacement must produce a JPEG before the configured first-frame deadline.
+
 **Internal entry point:** [`index.ts`](index.ts). The published `ain-nvr/camera-runtime` facade and root re-export retain the same names in ESM and CommonJS.
 
 ## Module API

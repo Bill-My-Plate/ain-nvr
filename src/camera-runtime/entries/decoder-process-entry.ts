@@ -1,6 +1,9 @@
 import { CAMERA_RUNTIME_CONSTANTS } from '../constants/camera-runtime-numeric-values.constant.js';
-import { RtspUrlFrameExtractor } from '../../frame-extractor/index.js';
-import { createScryptedLibavRuntime } from '../../frame-extractor/index.js';
+import {
+  createScryptedLibavRuntime,
+  detectDecoderHostCapabilities,
+  RtspUrlFrameExtractor,
+} from '../../frame-extractor/index.js';
 import { deferred } from '../utils/deferred.util.js';
 import { serializeError } from '../utils/serialize-error.util.js';
 import type { DecoderCommand } from '../types/decoder-command.type.js';
@@ -50,6 +53,10 @@ function startDecoderProcessEntry(): void {
         url: command.url,
         runtime,
         ...command.profile,
+        capabilities: {
+          ...detectDecoderHostCapabilities(),
+          softwareOnly: command.softwareOnly,
+        },
         onFrame: async (frame) => {
           if (stopping) return;
           if (frame.data.length > command.maximumFrameBytes)

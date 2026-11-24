@@ -6,10 +6,12 @@ export interface DecoderHostCapabilities {
   readonly platform: NodeJS.Platform;
   /** CPU architecture reported by the decoder host. */
   readonly arch: string;
-  /** Available hardware render devices. */
+  /** Hardware render devices the process can read and write. */
   readonly renderDevices: readonly string[];
   /** Whether CUDA decoding is available on this host. */
   readonly cudaAvailable: boolean;
   /** Whether the host has an Intel CPU. */
   readonly intelCpu: boolean;
+  /** Whether to restrict decoder selection to the CPU. */
+  readonly softwareOnly?: boolean;
 }

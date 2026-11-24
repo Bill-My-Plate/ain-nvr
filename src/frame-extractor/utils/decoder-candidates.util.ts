@@ -6,26 +6,27 @@ import type { DecoderHostCapabilities } from '../types/decoder-host-capabilities
 export function decoderCandidates(
   capabilities: DecoderHostCapabilities,
 ): readonly DecoderCandidate[] {
+  const software: DecoderCandidate = { label: 'software' };
+  if (capabilities.softwareOnly) return [software];
   const candidates: DecoderCandidate[] = [];
 
   if (capabilities.platform === 'darwin' && capabilities.arch === 'arm64') {
     candidates.push({ label: 'videotoolbox', hardwareDevice: 'videotoolbox' });
   } else if (capabilities.platform === 'linux') {
-    if (capabilities.renderDevices.length === 0) {
-      candidates.push({ label: 'vaapi', hardwareDevice: 'vaapi' });
-    } else {
-      for (const deviceName of capabilities.renderDevices) {
-        candidates.push({
-          label: `vaapi:${deviceName}`,
-          hardwareDevice: 'vaapi',
-          deviceName,
-        });
-      }
+    // A generic VAAPI probe can fall through to X11 when DRM is unavailable.
+    for (const deviceName of capabilities.renderDevices) {
+      candidates.push({
+        label: `vaapi:${deviceName}`,
+        hardwareDevice: 'vaapi',
+        deviceName,
+      });
     }
     if (capabilities.cudaAvailable) {
       candidates.push({ label: 'cuda', hardwareDevice: 'cuda' });
     }
-    candidates.push({ label: 'vulkan', hardwareDevice: 'vulkan' });
+    if (capabilities.renderDevices.length > 0) {
+      candidates.push({ label: 'vulkan', hardwareDevice: 'vulkan' });
+    }
   } else if (capabilities.platform === 'win32') {
     if (capabilities.intelCpu) {
       candidates.push({
@@ -38,6 +39,6 @@ export function decoderCandidates(
     candidates.push({ label: 'vulkan', hardwareDevice: 'vulkan' });
   }
 
-  candidates.push({ label: 'software' });
+  candidates.push(software);
   return candidates;
 }

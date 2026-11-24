@@ -1,5 +1,5 @@
 import { cpus } from 'node:os';
-import { readdirSync } from 'node:fs';
+import { accessSync, constants, readdirSync } from 'node:fs';
 
 import type { DecoderHostCapabilities } from '../types/decoder-host-capabilities.interface.js';
 /**
@@ -13,7 +13,15 @@ export function detectDecoderHostCapabilities(
     try {
       renderDevices = readdirSync('/dev/dri')
         .filter((entry) => entry.startsWith('renderD'))
-        .map((entry) => `/dev/dri/${entry}`);
+        .map((entry) => `/dev/dri/${entry}`)
+        .filter((device) => {
+          try {
+            accessSync(device, constants.R_OK | constants.W_OK);
+            return true;
+          } catch {
+            return false;
+          }
+        });
     } catch {
       renderDevices = [];
     }

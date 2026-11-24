@@ -1,5 +1,9 @@
 import { fork, type ChildProcess } from 'node:child_process';
-import type { ExtractedJpegFrame } from '../../frame-extractor/index.js';
+import {
+  decoderCandidates,
+  detectDecoderHostCapabilities,
+  type ExtractedJpegFrame,
+} from '../../frame-extractor/index.js';
 import { privateEntry } from '../utils/private-entry.util.js';
 import { asError } from '../../shared/index.js';
 import { deadline } from '../utils/deadline.util.js';
@@ -17,6 +21,7 @@ export class DecoderProcess {
   private child: ChildProcess | undefined;
   private readonly exited = deferred<void>();
   private readonly ready = deferred<void>();
+  private retryFrameTimer: NodeJS.Timeout | undefined;
   private stopping: Promise<void> | undefined;
   private closing = false;
   private failed = false;
@@ -30,9 +35,34 @@ export class DecoderProcess {
   ) {}
 
   /**
-   * Starts the operation and initializes its resources.
+   * Starts the decoder and waits for it to initialize.
    */
   public async start(url: string, cameraId: string, profile: FrameProfile): Promise<void> {
+    const capabilities = detectDecoderHostCapabilities();
+    this.launch({
+      type: 'start',
+      url,
+      cameraId,
+      profile,
+      maximumFrameBytes: this.settings.maximumFrameBytes,
+      softwareOnly: !decoderCandidates(capabilities).some((candidate) => candidate.hardwareDevice !== undefined),
+    });
+    try {
+      await deadline(
+        this.ready.promise,
+        this.settings.operationTimeoutMs,
+        'Decoder initialization timed out.',
+      );
+    } catch (error) {
+      await this.stop();
+      throw error;
+    }
+  }
+
+  /** Launches one child. The RTSP bridge and frame subscribers survive a CPU retry. */
+  private launch(command: Extract<DecoderCommand, { type: 'start' }>): void {
+    const canRetryOnCpu = process.platform === 'linux' && !command.softwareOnly;
+    let decoderError: Error | undefined;
     const child = fork(privateEntry('decoder-process-entry'), [], {
       serialization: 'advanced',
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
@@ -40,23 +70,46 @@ export class DecoderProcess {
       env: { ...process.env, NODE_OPTIONS: '' },
     });
     this.child = child;
-    child.on('error', (error) => {
+    child.once('error', (error) => {
+      if (child.pid === undefined) {
+        this.child = undefined;
+        this.exited.resolve();
+      }
       this.fail(error);
-      if (child.pid === undefined) this.exited.resolve();
     });
-    child.on('exit', (code, signal) => {
+    child.once('exit', (code, signal) => {
+      this.child = undefined;
+      if (!this.closing && canRetryOnCpu) {
+        try {
+          // A native crash or linker failure can exit without sending an IPC error.
+          // The controller's original first-frame timer may already have cleared.
+          this.retryFrameTimer = setTimeout(() => {
+            this.fail(failure('ETIMEDOUT', 'CPU decoder produced no JPEG before its deadline.'));
+          }, this.settings.firstFrameTimeoutMs);
+          this.launch({ ...command, softwareOnly: true });
+          return;
+        } catch (error) {
+          decoderError = asError(error);
+        }
+      }
       this.exited.resolve();
       if (!this.closing)
-        this.fail(failure('decoder_exited', `Decoder process exited (${signal ?? code}).`));
+        this.fail(decoderError ?? failure('decoder_exited', `Decoder process exited (${signal ?? code}).`));
     });
     child.on('message', (message: DecoderMessage) => {
-      if (this.closing) return;
+      if (this.closing || this.child !== child || decoderError !== undefined) return;
       if (message.type === 'ready') this.ready.resolve();
-      else if (message.type === 'error') this.fail(deserializeError(message.error));
-      else if (message.type === 'frame') {
+      else if (message.type === 'error') {
+        decoderError = deserializeError(message.error);
+        // Native reads can block shutdown. Reap the failed child before relaunching.
+        if (canRetryOnCpu) child.kill('SIGKILL');
+        else this.fail(decoderError);
+      } else if (message.type === 'frame') {
         try {
           if (message.frame.data.byteLength > this.settings.maximumFrameBytes)
             throw new Error('Oversized decoder frame.');
+          clearTimeout(this.retryFrameTimer);
+          this.retryFrameTimer = undefined;
           this.onFrame({ ...message.frame, data: Buffer.from(message.frame.data) });
           this.send({ type: 'ack' });
         } catch (error) {
@@ -64,18 +117,7 @@ export class DecoderProcess {
         }
       }
     });
-    this.send({
-      type: 'start',
-      url,
-      cameraId,
-      profile,
-      maximumFrameBytes: this.settings.maximumFrameBytes,
-    });
-    await deadline(
-      this.ready.promise,
-      this.settings.operationTimeoutMs,
-      'Decoder initialization timed out.',
-    );
+    this.send(command);
   }
 
   /**
@@ -84,9 +126,12 @@ export class DecoderProcess {
   public stop(): Promise<void> {
     if (this.stopping !== undefined) return this.stopping;
     this.closing = true;
+    clearTimeout(this.retryFrameTimer);
+    this.retryFrameTimer = undefined;
     this.ready.reject(new Error('Decoder stopped.'));
     this.stopping = (async () => {
-      if (this.child === undefined) return;
+      const child = this.child;
+      if (child === undefined) return;
       this.send({ type: 'stop' });
       try {
         await deadline(
@@ -95,33 +140,38 @@ export class DecoderProcess {
           'Decoder shutdown timed out.',
         );
       } catch {
-        this.child.kill('SIGKILL');
+        child.kill('SIGKILL');
         await this.exited.promise;
       }
     })();
     return this.stopping;
   }
   /**
-   * Sends send.
+   * Sends a command to the active child. Its exit handler owns crash recovery.
    */
   private send(message: DecoderCommand): void {
-    if (!this.child?.connected) return;
+    const child = this.child;
+    if (!child?.connected) return;
+    const onSendError = (error: Error | null): void => {
+      if (!error || this.closing || this.child !== child) return;
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EPIPE' && code !== 'ERR_IPC_CHANNEL_CLOSED' && code !== 'ERR_IPC_DISCONNECTED')
+        this.fail(error);
+    };
     try {
-      this.child.send(message, (error) => {
-        if (error && !this.closing) this.fail(error);
-      });
+      child.send(message, onSendError);
     } catch (error) {
-      if (!this.closing) this.fail(asError(error));
+      onSendError(asError(error));
     }
   }
   /**
-   * Fail.
+   * Reports a terminal failure once and stops the active child.
    */
   private fail(error: Error): void {
     if (this.failed || this.closing) return;
     this.failed = true;
     this.ready.reject(error);
-    this.onError(error);
     void this.stop().catch(() => undefined);
+    this.onError(error);
   }
 }
