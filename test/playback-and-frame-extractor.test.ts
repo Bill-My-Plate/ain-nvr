@@ -75,6 +75,68 @@ test('decoder order follows platform policy and falls back to software', async (
   assert.equal(destroyedPackets, 1);
 });
 
+test('decoder selection skips a decoder whose frame cannot be encoded', async () => {
+  let hardwareFrameDestroyed = false;
+  let hardwareDecoderDestroyed = false;
+  let softwareFrameDestroyed = false;
+  const packet: LibavPacketLike = {
+    streamIndex: 0,
+    flags: 1,
+    destroy: () => undefined,
+  };
+  const hardwareFrame: LibavFrameLike = {
+    width: 1280,
+    height: 720,
+    destroy: () => { hardwareFrameDestroyed = true; },
+  };
+  const softwareFrame: LibavFrameLike = {
+    width: 1280,
+    height: 720,
+    destroy: () => { softwareFrameDestroyed = true; },
+  };
+  const hardwareDecoder: LibavDecoderLike = {
+    sendPacket: async () => true,
+    receiveFrame: async () => hardwareFrame,
+    destroy: () => { hardwareDecoderDestroyed = true; },
+  };
+  const softwareDecoder: LibavDecoderLike = {
+    sendPacket: async () => true,
+    receiveFrame: async () => softwareFrame,
+    destroy: () => undefined,
+  };
+  const stream: LibavStreamLike = {
+    index: 0, codec: 'h264', type: 'video', width: 1280, height: 720,
+  };
+  const context: LibavFormatContextLike = {
+    streams: [stream],
+    open: async () => undefined,
+    createDecoder: (_index, hardware) => hardware === 'qsv' ? hardwareDecoder : softwareDecoder,
+    readFrame: async () => packet,
+    receiveFrame: async () => undefined,
+    close: async () => undefined,
+  };
+
+  const selection = await selectDecoder(
+    context,
+    stream,
+    1,
+    [
+      { label: 'qsv', hardwareDevice: 'qsv', decoder: 'h264_qsv' },
+      { label: 'software' },
+    ],
+    new AbortController().signal,
+    async (frame) => {
+      if (frame === hardwareFrame) throw new Error('Unsupported input');
+    },
+  );
+
+  assert.equal(selection.candidate.label, 'software');
+  assert.equal(selection.firstFrame, softwareFrame);
+  assert.equal(hardwareFrameDestroyed, true);
+  assert.equal(hardwareDecoderDestroyed, true);
+  assert.equal(softwareFrameDestroyed, false);
+});
+
 test('playback accepts a valid final IDR completed only by flush', async () => {
   const sps = createBaselineSps();
   const pps = Buffer.from([0x68, 0xaa]);

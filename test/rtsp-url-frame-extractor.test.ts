@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
 import { RtspUrlFrameExtractor } from '../src/frame-extractor/services/rtsp-url-frame-extractor.class.js';
+import type { LibavDecoderLike } from '../src/frame-extractor/types/libav-decoder-like.type.js';
 import type { LibavFormatContextLike } from '../src/frame-extractor/types/libav-format-context-like.type.js';
 import type { LibavFrameLike } from '../src/frame-extractor/types/libav-frame-like.type.js';
 import { delay as reconnectDelay } from '../src/frame-extractor/utils/delay.util.js';
@@ -12,6 +13,77 @@ test('completed reconnect delays release their abort listeners', async () => {
   const controller = new AbortController();
   await Promise.all([reconnectDelay(1, controller.signal), delay(5)]);
   assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+});
+
+test('URL extractor falls back when the first decoder frame cannot be encoded', { timeout: 5_000 }, async () => {
+  let hardwareFrameDestroyed = false;
+  let hardwareDecoderDestroyed = false;
+  let releaseRead!: () => void;
+  const readHeld = new Promise<undefined>((resolve) => { releaseRead = () => resolve(undefined); });
+  const hardwareFrame: LibavFrameLike = {
+    width: 1280,
+    height: 720,
+    destroy: () => { hardwareFrameDestroyed = true; },
+  };
+  const softwareFrame: LibavFrameLike = {
+    width: 1280,
+    height: 720,
+    destroy: () => undefined,
+  };
+  const hardwareDecoder: LibavDecoderLike = {
+    sendPacket: async () => true,
+    receiveFrame: async () => hardwareFrame,
+    destroy: () => { hardwareDecoderDestroyed = true; },
+  };
+  const softwareDecoder: LibavDecoderLike = {
+    sendPacket: async () => true,
+    receiveFrame: async () => softwareFrame,
+    destroy: () => undefined,
+  };
+  const context: LibavFormatContextLike = {
+    streams: [{ index: 0, type: 'video', codec: 'h264', width: 1280, height: 720 }],
+    open: async () => undefined,
+    createDecoder: (_index, hardware) => {
+      if (hardware === 'qsv') return hardwareDecoder;
+      if (hardware === undefined) return softwareDecoder;
+      throw new Error('hardware unavailable');
+    },
+    readFrame: async () => ({ streamIndex: 0, flags: 1, destroy: () => undefined }),
+    receiveFrame: async () => readHeld,
+    close: async () => { releaseRead(); },
+  };
+  let resolveDecoder!: (decoder: string) => void;
+  const delivered = new Promise<string>((resolve) => { resolveDecoder = resolve; });
+  const extractor = new RtspUrlFrameExtractor({
+    id: 'camera',
+    url: 'rtsp://camera/live',
+    runtime: {
+      keyPacketFlag: 1,
+      initialize: async () => undefined,
+      createFormatContext: () => context,
+      toJpeg: async (frame) => {
+        if (frame === hardwareFrame) throw new Error('Unsupported input');
+        return Buffer.from('jpeg');
+      },
+    },
+    onFrame: async (frame) => { resolveDecoder(frame.decoder); },
+    capabilities: {
+      platform: 'win32',
+      arch: 'x64',
+      renderDevices: [],
+      cudaAvailable: false,
+      intelCpu: true,
+    },
+  });
+
+  extractor.start();
+  try {
+    assert.equal(await delivered, 'software');
+    assert.equal(hardwareFrameDestroyed, true);
+    assert.equal(hardwareDecoderDestroyed, true);
+  } finally {
+    await extractor.stop();
+  }
 });
 
 test('URL extractor bounds queued frames and releases them on stop', { timeout: 5_000 }, async () => {

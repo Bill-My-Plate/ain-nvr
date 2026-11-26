@@ -50,6 +50,7 @@ export class RtspFrameSession {
         this.options.runtime.keyPacketFlag,
         decoderCandidates(this.options.capabilities),
         this.sessionController.signal,
+        (frame) => this.probeFrame(frame),
       );
       decoder = selection.decoder;
       this.options.onState('extracting');
@@ -104,5 +105,11 @@ export class RtspFrameSession {
       return;
     }
     this.queue.offer({ frame, captureTimeMs: this.options.now(), decoder: decoderName });
+  }
+
+  /** Rejects a candidate frame that the configured runtime cannot encode as JPEG. */
+  private async probeFrame(frame: LibavFrameLike): Promise<void> {
+    const jpeg = await this.options.runtime.toJpeg(frame, this.options.jpegQuality);
+    if (jpeg.length === 0) throw new Error('JPEG encoder returned no data.');
   }
 }

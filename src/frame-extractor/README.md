@@ -6,7 +6,7 @@ Turns live RTSP video into sampled JPEG frames. It selects a usable decoder, loa
 
 ## How it works
 
-The URL extractor owns its stop signal and reconnect policy. Each `RtspFrameSession` owns one libav context and decoder. Its `FrameInactivityWatchdog` closes a stalled context; its `FrameJpegQueue` encodes one frame and retains at most one waiting frame. Native frames are destroyed after JPEG encoding, before the consumer callback. Session cleanup destroys the waiting frame, waits for the active callback, destroys the decoder, and closes the context. Completed reconnect delays remove their abort listeners. The shared extractor owns a loopback bridge and closes it on startup or shutdown failure. Decoder candidates depend on host hardware and available libav codecs. The native addon preload path must stay compatible with pkg.
+The URL extractor owns its stop signal and reconnect policy. Each `RtspFrameSession` owns one libav context and decoder. Its `FrameInactivityWatchdog` closes a stalled context; its `FrameJpegQueue` encodes one frame and retains at most one waiting frame. Native frames are destroyed after JPEG encoding, before the consumer callback. Session cleanup destroys the waiting frame, waits for the active callback, destroys the decoder, and closes the context. Completed reconnect delays remove their abort listeners. The shared extractor owns a loopback bridge and closes it on startup or shutdown failure. Decoder candidates depend on host hardware and available libav codecs, and decoder selection requires the candidate's first frame to survive JPEG encoding; a candidate that cannot encode is destroyed and skipped. The native addon preload path must stay compatible with pkg.
 
 `RtspFrameSession`, `FrameJpegQueue`, `FrameInactivityWatchdog`, and their option types are private implementation files. They are not exported from `index.ts`.
 
@@ -22,9 +22,10 @@ The URL extractor owns its stop signal and reconnect policy. Each `RtspFrameSess
 - **`LibavReceivedFrame`** (type): Decoded frame and timing metadata returned by libav.
 - **`LibavFormatContextLike`** (type): Demuxing context operations used by the extractor.
 - **`LibavRuntime`** (type): Combined libav functions and objects used by the extractor.
+- **`FrameProbe`** (type): Verifies that a decoded frame can be encoded as JPEG.
 - **`detectDecoderHostCapabilities`** (value): Detects host decoder capabilities.
 - **`decoderCandidates`** (value): Orders decoder candidates for a codec and host.
-- **`selectDecoder`** (value): Selects an available decoder from the candidates.
+- **`selectDecoder`** (value): Selects the first candidate whose first frame can be encoded as JPEG.
 - **`isSaneFrame`** (value): Checks decoded frame dimensions and data before encoding.
 - **`DecoderCandidate`** (type): One decoder choice.
 - **`DecoderHostCapabilities`** (type): Host capabilities used for decoder selection.
