@@ -6,10 +6,15 @@ import type { LibavStreamLike } from '../types/libav-stream-like.type.js';
 
 import type { DecoderCandidate } from '../types/decoder-candidate.interface.js';
 import type { DecoderSelection } from '../types/decoder-selection.interface.js';
+import type { FrameProbe } from '../types/frame-probe.type.js';
 import { isSaneFrame } from './is-sane-frame.util.js';
 import { createCandidateDecoder } from './create-candidate-decoder.util.js';
 /**
- * Probes decoder candidates and selects one that produces valid frames.
+ * Probes decoder candidates and selects one that produces frames the runtime can encode.
+ *
+ * Candidates are tried in order. A candidate is rejected when decoder creation fails, when it
+ * cannot produce a usable frame, or when the optional frame probe rejects its first frame.
+ * Rejected frames and decoders are destroyed before the next candidate is attempted.
  */
 export async function selectDecoder(
   context: LibavFormatContextLike,
@@ -17,6 +22,8 @@ export async function selectDecoder(
   keyPacketFlag: number,
   candidates: readonly DecoderCandidate[],
   signal: AbortSignal,
+  /** Rejects a decoded frame that cannot be encoded for delivery. */
+  probeFrame?: FrameProbe,
 ): Promise<DecoderSelection> {
   const packets: LibavPacketLike[] = [];
   let packetBytes = 0;
@@ -83,6 +90,18 @@ export async function selectDecoder(
             ) {
               frame.destroy();
               throw new Error('Skipping VAAPI on AMD because crop handling is unreliable.');
+            }
+            if (probeFrame !== undefined) {
+              try {
+                await probeFrame(frame);
+              } catch (error) {
+                frame.destroy();
+                throw error;
+              }
+              if (signal.aborted) {
+                frame.destroy();
+                signal.throwIfAborted();
+              }
             }
             return { decoder, firstFrame: frame, candidate };
           }

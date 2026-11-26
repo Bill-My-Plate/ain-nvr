@@ -6,6 +6,7 @@ export type { LibavReceivedPacket } from './types/libav-received-packet.type.js'
 export type { LibavReceivedFrame } from './types/libav-received-frame.type.js';
 export type { LibavFormatContextLike } from './types/libav-format-context-like.type.js';
 export type { LibavRuntime } from './types/libav-runtime.type.js';
+export type { FrameProbe } from './types/frame-probe.type.js';
 export { detectDecoderHostCapabilities } from './utils/detect-decoder-host-capabilities.util.js';
 export { decoderCandidates } from './utils/decoder-candidates.util.js';
 export { selectDecoder } from './utils/select-decoder.util.js';
